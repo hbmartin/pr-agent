@@ -632,7 +632,7 @@ class GiteaProvider(GitProvider):
         """Get the ID of the authenticated user"""
         return f"{self.pr.user.id}" if self.pr else ""
 
-    def is_supported(self, capability) -> bool:
+    def _is_supported(self, capability) -> bool:
         """Check if the provider is supported"""
         return True
 

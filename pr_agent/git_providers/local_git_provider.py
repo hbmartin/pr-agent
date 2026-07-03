@@ -56,7 +56,7 @@ class LocalGitProvider(GitProvider):
         if self.target_branch_name not in self.repo.heads:
             raise KeyError(f'Branch: {self.target_branch_name} does not exist')
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         if capability in ['get_issue_comments', 'create_inline_comment', 'publish_inline_comments', 'get_labels',
                           'gfm_markdown']:
             return False

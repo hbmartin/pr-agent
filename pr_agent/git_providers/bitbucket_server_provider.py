@@ -192,7 +192,7 @@ class BitbucketServerProvider(GitProvider):
     def publish_file_comments(self, file_comments: list) -> bool:
         pass
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         if capability in ['get_issue_comments', 'get_labels', 'gfm_markdown', 'publish_file_comments']:
             return False
         return True

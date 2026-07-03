@@ -306,7 +306,7 @@ class GerritProvider(GitProvider):
     def get_user_id(self):
         return self.repo.head.commit.author.email
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         if capability in [
             # 'get_issue_comments',
             'create_inline_comment',

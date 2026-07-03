@@ -70,7 +70,7 @@ class CodeCommitProvider(GitProvider):
     def provider_name(self):
         return "CodeCommit"
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         if capability in [
             "get_issue_comments",
             "create_inline_comment",

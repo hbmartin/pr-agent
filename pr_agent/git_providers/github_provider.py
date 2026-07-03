@@ -95,7 +95,7 @@ class GithubProvider(GitProvider):
             self.unreviewed_files_set = dict()
             self._get_incremental_commits()
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         if capability == "push_code" and get_settings().config.restricted_mode:
             return False
         return True
