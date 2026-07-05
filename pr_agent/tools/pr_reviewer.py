@@ -251,8 +251,11 @@ class PRReviewer:
         incremental_review_markdown_text = None
         # Add incremental review section
         if self.incremental.is_incremental:
-            last_commit_url = f"{self.git_provider.get_pr_url()}/commits/" \
-                              f"{self.git_provider.incremental.first_new_commit_sha}"
+            first_new_commit_sha = self.git_provider.incremental.first_new_commit_sha
+            if hasattr(self.git_provider, "get_incremental_review_url"):
+                last_commit_url = self.git_provider.get_incremental_review_url(first_new_commit_sha)
+            else:
+                last_commit_url = f"{self.git_provider.get_pr_url()}/commits/{first_new_commit_sha}"
             incremental_review_markdown_text = f"Starting from commit {last_commit_url}"
 
         markdown_text = convert_to_markdown_v2(data, self.git_provider.is_supported("gfm_markdown"),
