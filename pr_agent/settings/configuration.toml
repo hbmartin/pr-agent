@@ -58,6 +58,10 @@ ignore_repositories = [] # a list of regular expressions of repository full name
 ignore_language_framework = [] # a list of code-generation languages or frameworks (e.g. 'protobuf', 'go_gen') whose auto-generated source files will be excluded from analysis
 #
 restricted_mode = false # when true, skip operations that require elevated permissions (e.g. pushing code to the repository)
+# diff caching (cross-request; instance-level caching is always on)
+enable_diff_files_cache=false # cache fetched diff files across requests, keyed by PR head commit; saves provider API calls when several commands run against the same PR head
+diff_files_cache_ttl=300 # seconds a cached diff stays valid
+diff_files_cache_max_entries=50 # max PRs kept in the diff cache (FIFO eviction)
 is_auto_command = false # will be auto-set to true if the command is triggered by an automation
 enable_ai_metadata = false # will enable adding ai metadata
 reasoning_effort = "medium" # "none", "minimal", "low", "medium", "high", "xhigh"

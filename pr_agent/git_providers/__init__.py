@@ -1,5 +1,6 @@
 from starlette_context import context
 
+from pr_agent.algo.diff_cache import wrap_provider_with_diff_cache
 from pr_agent.config_loader import get_settings
 from pr_agent.git_providers.azuredevops_provider import AzureDevopsProvider
 from pr_agent.git_providers.bitbucket_provider import BitbucketProvider
@@ -58,6 +59,7 @@ def get_git_provider_with_context(pr_url) -> GitProvider:
             if provider_id not in _GIT_PROVIDERS:
                 raise ValueError(f"Unknown git provider: {provider_id}")
             git_provider = _GIT_PROVIDERS[provider_id](pr_url)
+            wrap_provider_with_diff_cache(git_provider, pr_url)
             if is_context_env:
                 context["git_provider"] = {pr_url: git_provider}
             return git_provider
