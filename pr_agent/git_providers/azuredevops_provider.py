@@ -106,9 +106,6 @@ class AzureDevopsProvider(GitProvider):
         # comment_id is actually thread_id
         return self.reply_to_thread(comment_id, body, is_temporary)
 
-    def get_pr_description_full(self) -> str:
-        return self.pr.description
-
     def edit_comment(self, comment: Comment, body: str):
         try:
             self.azure_devops_client.update_comment(
@@ -418,13 +415,6 @@ class AzureDevopsProvider(GitProvider):
                 f"Could not update pull request {self.pr_num} description: {e}"
             )
 
-    def remove_initial_comment(self):
-        try:
-            for comment in self.temp_comments:
-                self.remove_comment(comment)
-        except Exception as e:
-            get_logger().exception(f"Failed to remove temp comments, error: {e}")
-
     def publish_inline_comment(self, body: str, relevant_file: str, relevant_line_in_file: str, original_suggestion=None):
         self.publish_inline_comments([self.create_inline_comment(body, relevant_file, relevant_line_in_file)])
 
@@ -469,9 +459,6 @@ class AzureDevopsProvider(GitProvider):
                     overall_success = False
             return overall_success
 
-    def get_title(self):
-        return self.pr.title
-
     def get_languages(self):
         languages = []
         files = self.azure_devops_client.get_items(
@@ -508,9 +495,6 @@ class AzureDevopsProvider(GitProvider):
         source_branch = pr_info.source_ref_name.split("/")[-1]
         return source_branch
 
-    def get_user_id(self):
-        return 0
-
     def get_issue_comments(self) -> list[Comment]:
         threads = self.azure_devops_client.get_threads(repository_id=self.repo_slug, pull_request_id=self.pr_num, project=self.workspace_slug)
         threads.reverse()
@@ -522,12 +506,6 @@ class AzureDevopsProvider(GitProvider):
                     comment.thread_id = thread.id
                     comment_list.append(comment)
         return comment_list
-
-    def add_eyes_reaction(self, issue_comment_id: int, disable_eyes: bool = False) -> Optional[int]:
-        return True
-
-    def remove_reaction(self, issue_comment_id: int, reaction_id: int) -> bool:
-        return True
 
     def set_like(self, thread_id: int, comment_id: int, create: bool = True):
         if create:
@@ -625,9 +603,6 @@ class AzureDevopsProvider(GitProvider):
         )
         return self.pr
 
-    def get_commit_messages(self):
-        return ""  # not implemented yet
-
     def get_pr_id(self):
         try:
             pr_id = f"{self.workspace_slug}/{self.repo_slug}/{self.pr_num}"
@@ -636,9 +611,6 @@ class AzureDevopsProvider(GitProvider):
             if get_settings().config.verbosity_level >= 2:
                 get_logger().info(f"Failed to get PR id, error: {e}")
             return ""
-
-    def publish_file_comments(self, file_comments: list) -> bool:
-        pass
 
     def get_line_link(self, relevant_file: str, relevant_line_start: int, relevant_line_end: int = None) -> str:
         return self.pr_url+f"?_a=files&path={relevant_file}"

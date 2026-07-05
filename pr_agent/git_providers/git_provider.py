@@ -207,13 +207,14 @@ class GitProvider(ABC):
     def get_pr_branch(self):
         pass
 
-    @abstractmethod
     def get_user_id(self):
-        pass
+        return 0
 
-    @abstractmethod
+    def get_title(self):
+        return self.pr.title
+
     def get_pr_description_full(self) -> str:
-        pass
+        return self.pr.description
 
     def edit_comment(self, comment, body: str):
         pass
@@ -364,9 +365,15 @@ class GitProvider(ABC):
     def publish_inline_comments(self, comments: list[dict]):
         pass
 
-    @abstractmethod
+    def publish_file_comments(self, file_comments: list) -> bool:
+        pass  # gated by is_supported("publish_file_comments")
+
     def remove_initial_comment(self):
-        pass
+        try:
+            for comment in getattr(self, "temp_comments", []):
+                self.remove_comment(comment)
+        except Exception as e:
+            get_logger().exception(f"Failed to remove temp comments, error: {e}")
 
     @abstractmethod
     def remove_comment(self, comment):
@@ -383,29 +390,24 @@ class GitProvider(ABC):
         pass
 
     #### labels operations ####
-    @abstractmethod
     def publish_labels(self, labels):
-        pass
+        pass  # not supported by all providers; see is_supported("get_labels")
 
-    @abstractmethod
     def get_pr_labels(self, update=False):
-        pass
+        pass  # not supported by all providers; see is_supported("get_labels")
 
     def get_repo_labels(self):
         pass
 
-    @abstractmethod
     def add_eyes_reaction(self, issue_comment_id: int, disable_eyes: bool = False) -> Optional[int]:
-        pass
+        return True  # no-op default; providers with reaction support override
 
-    @abstractmethod
     def remove_reaction(self, issue_comment_id: int, reaction_id: int) -> bool:
-        pass
+        return True  # no-op default; providers with reaction support override
 
     #### commits operations ####
-    @abstractmethod
     def get_commit_messages(self):
-        pass
+        return ""
 
     def get_pr_url(self) -> str:
         if hasattr(self, 'pr_url'):

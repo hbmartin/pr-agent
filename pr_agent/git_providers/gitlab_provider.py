@@ -799,9 +799,6 @@ class GitLabProvider(GitProvider):
         # note that we publish suggestions one-by-one. so, if one fails, the rest will still be published
         return True
 
-    def publish_file_comments(self, file_comments: list) -> bool:
-        pass
-
     def search_line(self, relevant_file, relevant_line_in_file):
         target_file = None
 
@@ -855,13 +852,6 @@ class GitLabProvider(GitProvider):
         elif relevant_line_in_file[0] == '+':
             edit_type = 'addition'
         return edit_type
-
-    def remove_initial_comment(self):
-        try:
-            for comment in self.temp_comments:
-                self.remove_comment(comment)
-        except Exception as e:
-            get_logger().exception(f"Failed to remove temp comments, error: {e}")
 
     def remove_comment(self, comment):
         try:

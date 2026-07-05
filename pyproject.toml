@@ -113,6 +113,12 @@ lint.ignore = [
 "pr_agent/tools/pr_similar_issue.py" = [
   "F821", # pinecone/pandas imports are optional deps, currently commented out in requirements
 ]
+"tests/**" = [
+  "B009", # getattr with constant is used deliberately in tests
+  "B011", # assert False is idiomatic pytest style
+  "B012", # return-in-finally in e2e polling loops
+  "B017", # pytest.raises(Exception) is acceptable in tests
+]
 
 [tool.mypy]
 # Gradual-typing baseline: pr_agent/algo and pr_agent/git_providers are checked, permissively.

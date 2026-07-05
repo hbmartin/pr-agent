@@ -384,16 +384,6 @@ class GerritProvider(GitProvider):
             'provider')
 
 
-    def publish_labels(self, labels):
-        # Not applicable to the local git provider,
-        # but required by the interface
-        pass
-
-    def remove_initial_comment(self):
-        # remove repo, cloned in previous steps
-        # shutil.rmtree(self.repo_path)
-        pass
-
     def remove_comment(self, comment):
         pass
 

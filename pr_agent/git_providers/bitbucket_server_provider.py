@@ -187,9 +187,6 @@ class BitbucketServerProvider(GitProvider):
                 get_logger().error(f"Failed to publish code suggestion, error: {e}")
             return False
 
-    def publish_file_comments(self, file_comments: list) -> bool:
-        pass
-
     def _is_supported(self, capability: str) -> bool:
         if capability in ['get_issue_comments', 'get_labels', 'gfm_markdown', 'publish_file_comments']:
             return False
@@ -311,13 +308,6 @@ class BitbucketServerProvider(GitProvider):
         if not is_temporary:
             self.bitbucket_client.add_pull_request_comment(self.workspace_slug, self.repo_slug, self.pr_num, pr_comment)
 
-    def remove_initial_comment(self):
-        try:
-            for comment in self.temp_comments:
-                self.remove_comment(comment)
-        except ValueError as e:
-            get_logger().exception(f"Failed to remove temp comments, error: {e}")
-
     def remove_comment(self, comment):
         pass
 
@@ -409,9 +399,6 @@ class BitbucketServerProvider(GitProvider):
             else:
                 get_logger().error(f"Could not publish inline comment: {comment}")
 
-    def get_title(self):
-        return self.pr.title
-
     def get_languages(self):
         return {"yaml": 0}  # devops LOL
 
@@ -427,19 +414,10 @@ class BitbucketServerProvider(GitProvider):
         else:
             return None
 
-    def get_user_id(self):
-        return 0
-
     def get_issue_comments(self):
         raise NotImplementedError(
             "Bitbucket provider does not support issue comments yet"
         )
-
-    def add_eyes_reaction(self, issue_comment_id: int, disable_eyes: bool = False) -> Optional[int]:
-        return True
-
-    def remove_reaction(self, issue_comment_id: int, reaction_id: int) -> bool:
-        return True
 
     @staticmethod
     def _parse_bitbucket_server(url: str) -> str:
@@ -509,9 +487,6 @@ class BitbucketServerProvider(GitProvider):
     def _get_pr_file_content(self, remote_link: str):
         return ""
 
-    def get_commit_messages(self):
-        return ""
-
     # bitbucket does not support labels
     def publish_description(self, pr_title: str, description: str):
         pr = self.pr
@@ -533,13 +508,7 @@ class BitbucketServerProvider(GitProvider):
             raise e
 
     # bitbucket does not support labels
-    def publish_labels(self, pr_types: list):
-        pass
-
     # bitbucket does not support labels
-    def get_pr_labels(self, update=False):
-        pass
-
     def _get_pr_comments_path(self):
         return f"rest/api/latest/projects/{self.workspace_slug}/repos/{self.repo_slug}/pull-requests/{self.pr_num}/comments"
 

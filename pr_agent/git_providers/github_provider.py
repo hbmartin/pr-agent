@@ -1223,9 +1223,6 @@ class GithubProvider(GitProvider):
             get_logger().exception(f"Failed to auto-approve, error: {e}")
             return False
 
-    def calc_pr_statistics(self, pull_request_data: dict):
-            return {}
-
     def validate_comments_inside_hunks(self, code_suggestions):
         """
         validate that all committable comments are inside PR hunks - this is a must for committable comments in GitHub
