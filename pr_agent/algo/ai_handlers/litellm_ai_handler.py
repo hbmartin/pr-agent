@@ -15,7 +15,8 @@ from pr_agent.algo import (CLAUDE_EXTENDED_THINKING_MODELS,
                            STREAMING_REQUIRED_MODELS,
                            SUPPORT_REASONING_EFFORT_MODELS,
                            USER_MESSAGE_ONLY_MODELS)
-from pr_agent.algo.ai_handlers.base_ai_handler import BaseAiHandler
+from pr_agent.algo.ai_handlers.base_ai_handler import (BaseAiHandler,
+                                                       make_api_error)
 from pr_agent.algo.ai_handlers.litellm_helpers import (
     MockResponse, _get_azure_ad_token, _handle_streaming_response,
     _process_litellm_extra_body)
@@ -436,7 +437,7 @@ class LiteLLMAIHandler(BaseAiHandler):
                 if img_path:
                     try:
                         # check if the image link is alive
-                        r = requests.head(img_path, allow_redirects=True)
+                        r = requests.head(img_path, allow_redirects=True, timeout=10)
                         if r.status_code == 404:
                             error_msg = f"The image link is not [alive](img_path).\nPlease repost the original image as a comment, and send the question again with 'quote reply' (see [instructions](https://pr-agent-docs.codium.ai/tools/ask/#ask-on-images-using-the-pr-code-as-context))."
                             get_logger().error(error_msg)
@@ -605,7 +606,7 @@ class LiteLLMAIHandler(BaseAiHandler):
                     raise
             except Exception as e:
                 get_logger().warning(f"Unknown error during LLM inference: {e}")
-                raise openai.APIError from e
+                raise make_api_error(f"Unknown error during LLM inference: {e}") from e
 
             get_logger().debug(f"\nAI response:\n{resp}")
 
@@ -635,7 +636,7 @@ class LiteLLMAIHandler(BaseAiHandler):
         else:
             response = await acompletion(**kwargs)
             if response is None or len(response["choices"]) == 0:
-                raise openai.APIError
+                raise make_api_error("LLM response is empty (no choices returned)")
             return (response["choices"][0]['message']['content'],
                     response["choices"][0]["finish_reason"],
                     response)

@@ -1,5 +1,10 @@
 comment: false
 coverage:
   status:
-    patch: false
+    # Informational patch status: reports coverage on changed lines without
+    # blocking merges. Flip informational to false to enforce the target.
+    patch:
+      default:
+        target: 70%
+        informational: true
     project: false

@@ -165,7 +165,8 @@ def upload_patch(patch, path):
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {patch_server_token}",
-        }
+        },
+        timeout=30
     )
     response.raise_for_status()
     patch_server_endpoint = patch_server_endpoint.rstrip("/")
@@ -306,7 +307,7 @@ class GerritProvider(GitProvider):
     def get_user_id(self):
         return self.repo.head.commit.author.email
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         if capability in [
             # 'get_issue_comments',
             'create_inline_comment',

@@ -1,8 +1,8 @@
-from abc import ABC, abstractmethod
 # enum EDIT_TYPE (ADDED, DELETED, MODIFIED, RENAMED)
 import os
 import shutil
 import subprocess
+from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 from pr_agent.algo.types import FilePatchInfo
@@ -71,9 +71,29 @@ def get_git_ssl_env() -> dict[str, str]:
     return returned_env
 
 
+# Every capability string that provider _is_supported implementations and call
+# sites are allowed to use. Add new capabilities here so a typo at a call site
+# warns instead of silently taking the unsupported branch.
+KNOWN_CAPABILITIES = frozenset({
+    "create_inline_comment",
+    "get_issue_comments",
+    "get_labels",
+    "gfm_markdown",
+    "publish_file_comments",
+    "publish_inline_comments",
+    "push_code",
+})
+
+
 class GitProvider(ABC):
-    @abstractmethod
     def is_supported(self, capability: str) -> bool:
+        if capability not in KNOWN_CAPABILITIES:
+            get_logger().warning(f"Unknown git provider capability '{capability}'. "
+                                 f"Known capabilities: {sorted(KNOWN_CAPABILITIES)}")
+        return self._is_supported(capability)
+
+    @abstractmethod
+    def _is_supported(self, capability: str) -> bool:
         pass
 
     #Given a url (issues or PR/MR) - get the .git repo url to which they belong. Needs to be implemented by the provider.

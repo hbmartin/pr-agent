@@ -31,6 +31,24 @@ dynamic = ["dependencies"]
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
 
+# Optional features. Provider extras currently mirror pins that also ship in the
+# base install (requirements.txt); they document the per-platform dependency
+# groups so the base install can be slimmed down in a future major release.
+# Keep versions in sync with requirements.txt.
+[project.optional-dependencies]
+gitlab = ["python-gitlab==8.3.0"]
+bitbucket = ["atlassian-python-api==3.41.4"]
+azure-devops = ["azure-devops==7.1.0b4", "azure-identity==1.25.0", "msrest==0.7.1"]
+gitea = ["giteapy==1.0.8"]
+aws = ["boto3==1.40.45"] # Bedrock, CodeCommit, Secrets Manager
+gcp = [
+  "google-cloud-aiplatform==1.154.0",
+  'google-cloud-storage==2.10.0; python_version < "3.13"',
+  'google-cloud-storage==3.12.0; python_version >= "3.13"',
+]
+# Enables pr_agent.algo.ai_handlers.langchain_ai_handler.LangChainOpenAIHandler
+langchain = ["langchain==0.2.0", "langchain-core==0.2.28", "langchain-openai==0.1.20"]
+
 [project.urls]
 "Homepage" = "https://github.com/the-pr-agent/pr-agent"
 "Documentation" = "https://docs.pr-agent.ai/"
@@ -78,9 +96,34 @@ lint.ignore = ["E999", "B008"]
   "E402",
 ] # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
 
+[tool.mypy]
+# Gradual-typing baseline: only pr_agent/algo is checked for now, permissively.
+# Run with: ./.venv/bin/mypy
+# Tighten (more paths, fewer disabled codes) as modules get annotated.
+files = ["pr_agent/algo"]
+follow_imports = "silent"
+ignore_missing_imports = true
+no_strict_optional = true
+
+[[tool.mypy.overrides]]
+# Baseline exemptions for pre-existing findings; remove as they get fixed.
+module = [
+  "pr_agent.algo.git_patch_processing",
+  "pr_agent.algo.pr_processing",
+  "pr_agent.algo.ai_handlers.*",
+]
+disable_error_code = ["var-annotated", "assignment", "arg-type"]
+
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]
+# B101: assert usage (fine outside production asserts)
+# B104: webhook servers intentionally bind 0.0.0.0 inside containers
+# B105: flagged constants are env-var names / placeholders, not passwords
+# B110: try/except/pass is used pervasively for best-effort fallbacks
+# B310: extra-config urlopen validates allowed schemes before fetching
+# B404/B603/B607: subprocess usage is fixed-args git commands, no shell
+# B701: jinja2 templates render LLM prompts, not HTML - autoescape is irrelevant
+skips = ["B101", "B104", "B105", "B110", "B310", "B404", "B603", "B607", "B701"]
 tests = []
 
 [tool.pytest.ini_options]

@@ -118,7 +118,7 @@ class DiffInputProvider(GitProvider):
         self.pr = _PullRequestMimic(self._title, self.diff_files)
 
     # ---- INPUT methods (real) ----
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         # Steer tools to the simplest render branches (no gfm table, no inline comments, no labels).
         return False
 

@@ -150,7 +150,7 @@ class AzureDevopsProvider(GitProvider):
             get_logger().exception(f"Failed to get labels, error: {e}")
             return []
 
-    def is_supported(self, capability: str) -> bool:
+    def _is_supported(self, capability: str) -> bool:
         return True
 
     def set_pr(self, pr_url: str):
