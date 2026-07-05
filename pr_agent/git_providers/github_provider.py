@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
-from github import AppAuthentication, Auth, Github, GithubException
+from github import Auth, Github, GithubException
 from github.Issue import Issue
 from starlette_context import context
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential, wait_random
@@ -955,9 +955,7 @@ class GithubProvider(GitProvider):
                 raise ValueError("GitHub app ID and private key are required when using GitHub app deployment") from e
             if not self.installation_id:
                 raise ValueError("GitHub app installation ID is required when using GitHub app deployment")
-            auth = AppAuthentication(app_id=app_id, private_key=private_key,
-                                     installation_id=self.installation_id)
-            self.auth = auth
+            self.auth = Auth.AppAuth(app_id, private_key).get_installation_auth(self.installation_id)
         elif self.deployment_type == 'user':
             try:
                 token = get_settings().github.user_token

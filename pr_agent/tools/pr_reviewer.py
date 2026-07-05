@@ -351,6 +351,9 @@ class PRReviewer:
         last_seen_commit_date = (
             self.incremental.last_seen_commit.commit.author.date if self.incremental.last_seen_commit else None
         )
+        if last_seen_commit_date is not None and last_seen_commit_date.tzinfo is not None:
+            # PyGithub 2.x returns timezone-aware datetimes; normalize to compare with the naive threshold
+            last_seen_commit_date = last_seen_commit_date.astimezone(datetime.timezone.utc).replace(tzinfo=None)
         all_commits_too_recent = (
             last_seen_commit_date > recent_commits_threshold if self.incremental.last_seen_commit else False
         )
