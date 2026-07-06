@@ -29,6 +29,13 @@ OUTPUT_BUFFER_TOKENS_HARD_THRESHOLD = 1000
 MAX_EXTRA_LINES = 10
 
 
+def _log_pr_main_language(pr_languages: list) -> None:
+    try:
+        get_logger().info(f"PR main language: {pr_languages[0]['language']}")
+    except (IndexError, KeyError, TypeError) as e:
+        get_logger().debug(f"Failed to log PR main language: {e}")
+
+
 def cap_and_log_extra_lines(value, direction) -> int:
     if value > MAX_EXTRA_LINES:
         get_logger().warning(f"patch_extra_lines_{direction} was {value}, capping to {MAX_EXTRA_LINES}")
@@ -60,10 +67,7 @@ def get_pr_diff(git_provider: GitProvider, token_handler: TokenHandler,
     # get pr languages
     pr_languages = sort_files_by_main_languages(git_provider.get_languages(), diff_files)
     if pr_languages:
-        try:
-            get_logger().info(f"PR main language: {pr_languages[0]['language']}")
-        except Exception:
-            pass
+        _log_pr_main_language(pr_languages)
 
     # generate a standard diff string, with patch extension
     patches_extended, total_tokens, patches_extended_tokens = pr_generate_extended_diff(
@@ -154,10 +158,7 @@ def get_pr_diff_multiple_patchs(git_provider: GitProvider, token_handler: TokenH
     # get pr languages
     pr_languages = sort_files_by_main_languages(git_provider.get_languages(), diff_files)
     if pr_languages:
-        try:
-            get_logger().info(f"PR main language: {pr_languages[0]['language']}")
-        except Exception:
-            pass
+        _log_pr_main_language(pr_languages)
 
     patches_compressed_list, total_tokens_list, deleted_files_list, remaining_files_list, file_dict, files_in_patches_list = \
         pr_generate_compressed_diff(pr_languages, token_handler, model, add_line_numbers_to_hunks, large_pr_handling=True)
@@ -261,7 +262,7 @@ def pr_generate_compressed_diff(top_langs: list, token_handler: TokenHandler, mo
     # additional iterations (if needed)
     if large_pr_handling:
         NUMBER_OF_ALLOWED_ITERATIONS = get_settings().pr_description.get("max_ai_calls", 4) - 1 # one more call is to summarize
-        for _i in range(NUMBER_OF_ALLOWED_ITERATIONS-1):
+        for _ in range(NUMBER_OF_ALLOWED_ITERATIONS-1):
             if remaining_files_list:
                 total_tokens, patches, remaining_files_list, files_in_patch_list = generate_full_patch(convert_hunks_to_line_numbers,
                                                                                  file_dict,
@@ -288,7 +289,6 @@ def generate_full_patch(convert_hunks_to_line_numbers, file_dict, max_tokens_mod
 
         patch = data['patch']
         new_patch_tokens = data['tokens']
-        data['edit_type']
 
         # Hard Stop, no more tokens
         if total_tokens > max_tokens_model - OUTPUT_BUFFER_TOKENS_HARD_THRESHOLD:

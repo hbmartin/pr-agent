@@ -288,8 +288,8 @@ class BitbucketProvider(GitProvider):
                     'names_filtered': names_filtered
 
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                get_logger().debug(f"Failed to log filtered Bitbucket files: {e}")
 
         # get the pr patches
         try:
@@ -644,11 +644,8 @@ class BitbucketProvider(GitProvider):
         payload = json.dumps(payload_dict)
 
         response = requests.request("PUT", self.bitbucket_pull_request_api_url, headers=self.headers, data=payload)
-        try:
-            if response.status_code != 200:
-                get_logger().info(f"Failed to update description, error code: {response.status_code}")
-        except Exception:
-            pass
+        if response.status_code != 200:
+            get_logger().info(f"Failed to update description, error code: {response.status_code}")
         return response
 
     # bitbucket does not support labels

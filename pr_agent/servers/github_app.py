@@ -127,8 +127,6 @@ async def handle_new_pr_opened(body: Dict[str, Any],
                                action: str,
                                log_context: Dict[str, Any],
                                agent: PRAgent):
-    body.get("pull_request", {}).get("title", "")
-
     pull_request, api_url = _check_pull_request_event(action, body, log_context)
     if not (pull_request and api_url):
         get_logger().info(f"Invalid PR event: {action=} {api_url=}")

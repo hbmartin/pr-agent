@@ -1,3 +1,4 @@
+import base64
 import os
 import time
 from datetime import datetime
@@ -15,6 +16,7 @@ from tests.e2e_tests.e2e_utils import (
 log_level = os.environ.get("LOG_LEVEL", "INFO")
 setup_logger(log_level)
 logger = get_logger()
+REQUEST_TIMEOUT_SECONDS = 30
 
 def test_e2e_run_gitea_app():
     repo_name = 'pr-agent-tests'
@@ -50,7 +52,8 @@ def test_e2e_run_gitea_app():
 
         response = requests.get(
             f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/branches/{base_branch}",
-            headers=headers
+            headers=headers,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         base_branch_data = response.json()
@@ -63,19 +66,20 @@ def test_e2e_run_gitea_app():
         response = requests.post(
             f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/git/refs",
             headers=headers,
-            json=branch_data
+            json=branch_data,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
 
         logger.info(f"Updating file {FILE_PATH} in branch {new_branch}")
 
-        import base64
         file_content_encoded = base64.b64encode(NEW_FILE_CONTENT.encode()).decode()
 
         try:
             response = requests.get(
                 f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/contents/{FILE_PATH}?ref={new_branch}",
-                headers=headers
+                headers=headers,
+                timeout=REQUEST_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
             existing_file = response.json()
@@ -97,7 +101,8 @@ def test_e2e_run_gitea_app():
         response = requests.put(
             f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/contents/{FILE_PATH}",
             headers=headers,
-            json=file_data
+            json=file_data,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
 
@@ -111,7 +116,8 @@ def test_e2e_run_gitea_app():
         response = requests.post(
             f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/pulls",
             headers=headers,
-            json=pr_data
+            json=pr_data,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         pr = response.json()
@@ -123,7 +129,8 @@ def test_e2e_run_gitea_app():
 
             response = requests.get(
                 f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/issues/{pr_number}/comments",
-                headers=headers
+                headers=headers,
+                timeout=REQUEST_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
             comments = response.json()
@@ -150,13 +157,15 @@ def test_e2e_run_gitea_app():
         response = requests.patch(
             f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/pulls/{pr_number}",
             headers=headers,
-            json=close_data
+            json=close_data,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
 
         response = requests.delete(
             f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/git/refs/heads/{new_branch}",
-            headers=headers
+            headers=headers,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
 
@@ -173,12 +182,14 @@ def test_e2e_run_gitea_app():
                 requests.patch(
                     f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/pulls/{pr_number}",
                     headers=headers,
-                    json={'state': 'closed'}
+                    json={'state': 'closed'},
+                    timeout=REQUEST_TIMEOUT_SECONDS,
                 )
 
             requests.delete(
                 f"{gitea_url}/api/v1/repos/{owner}/{repo_name}/git/refs/heads/{new_branch}",
-                headers=headers
+                headers=headers,
+                timeout=REQUEST_TIMEOUT_SECONDS,
             )
         except Exception as cleanup_error:
             logger.error(f"Failed to clean up after test: {cleanup_error}")

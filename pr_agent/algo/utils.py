@@ -192,7 +192,7 @@ def set_custom_labels(variables, git_provider=None) -> None:
         counter += 1
     variables["labels_minimal_to_labels_dict"] = labels_minimal_to_labels_dict
 
-def get_user_labels(current_labels: List[str] = None) -> List[str]:
+def get_user_labels(current_labels: List[str] | None = None) -> List[str]:
     """
     Only keep labels that has been added by the user
     """

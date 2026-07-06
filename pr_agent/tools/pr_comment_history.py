@@ -11,6 +11,13 @@ from pr_agent.git_providers.git_provider import GitProvider
 from pr_agent.log import get_logger
 
 
+def _extract_link(comment_text: str) -> str:
+    match = re.search(r"<!--([\s\S]*?)-->", comment_text)
+    if not match:
+        return ""
+    return f" up to commit {match.group(1).strip()}"
+
+
 def publish_persistent_comment_with_history(git_provider: GitProvider,
                                             pr_comment: str,
                                             initial_header: str,
@@ -22,16 +29,7 @@ def publish_persistent_comment_with_history(git_provider: GitProvider,
                                             only_fold=False):
     if hasattr(git_provider, '_publish_check_run') and get_settings().github.publish_as_check_run:
         if git_provider._publish_check_run(pr_comment, name):
-            return
-
-    def _extract_link(comment_text: str):
-        r = re.compile(r"<!--.*?-->")
-        match = r.search(comment_text)
-
-        up_to_commit_txt = ""
-        if match:
-            up_to_commit_txt = f" up to commit {match.group(0)[4:-3].strip()}"
-        return up_to_commit_txt
+            return None
 
     history_header = "#### Previous suggestions\n"
     last_commit_num = git_provider.get_latest_commit_url().split('/')[-1][:7]
@@ -114,7 +112,6 @@ def publish_persistent_comment_with_history(git_provider: GitProvider,
                     return comment
         except Exception as e:
             get_logger().exception(f"Failed to update persistent review, error: {e}")
-            pass
 
     # if we are here, we did not find a previous comment to update
     body = pr_comment.replace(initial_header, "").strip()

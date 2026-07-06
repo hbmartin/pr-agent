@@ -37,8 +37,10 @@ class PRSimilarIssue:
             try:
                 import pinecone
             except Exception as e:
-                raise Exception("Pinecone vectordb requires extra packages. Install them with `pip install pinecone-client "
-                                "\"pinecone-datasets @ git+https://github.com/mrT23/pinecone-datasets.git@main\"`.") from e
+                raise Exception(
+                    "Pinecone vectordb requires extra packages. Install them with `pip install pinecone "
+                    "\"pinecone-datasets @ git+https://github.com/mrT23/pinecone-datasets.git@main\"`."
+                ) from e
             # assuming pinecone api key and environment are set in secrets file
             try:
                 api_key = get_settings().pinecone.api_key
@@ -462,7 +464,7 @@ class PRSimilarIssue:
         except Exception:
             embeds = []
             get_logger().error('Failed to embed entire list, embedding one by one...')
-            for _i, text in enumerate(list_to_encode):
+            for text in list_to_encode:
                 try:
                     res = openai.Embedding.create(input=[text], engine=MODEL)
                     embeds.append(res['data'][0]['embedding'])
@@ -558,7 +560,7 @@ class PRSimilarIssue:
         except Exception:
             embeds = []
             get_logger().error('Failed to embed entire list, embedding one by one...')
-            for _i, text in enumerate(list_to_encode):
+            for text in list_to_encode:
                 try:
                     res = openai.Embedding.create(input=[text], engine=MODEL)
                     embeds.append(res['data'][0]['embedding'])
@@ -657,7 +659,7 @@ class PRSimilarIssue:
         except Exception:
             embeds = []
             get_logger().error('Failed to embed entire list, embedding one by one...')
-            for _i, text in enumerate(list_to_encode):
+            for text in list_to_encode:
                 try:
                     res = openai.Embedding.create(input=[text], engine=MODEL)
                     embeds.append(res['data'][0]['embedding'])
