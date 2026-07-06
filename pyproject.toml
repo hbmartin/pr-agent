@@ -50,6 +50,10 @@ gcp = [
 langchain = ["langchain==1.3.9", "langchain-core==1.4.6", "langchain-openai==1.1.14"]
 # Enables Prometheus metrics on the webhook servers (monitoring.enable_metrics)
 monitoring = ["prometheus-client==0.25.0"]
+# Vector-store backends for the /similar_issue tool (pr_similar_issue.py).
+# Pinecone additionally needs `pinecone-datasets` from git and has no extra here.
+lancedb = ["lancedb==0.5.1"]
+qdrant = ["qdrant-client==1.15.1"]
 
 [project.urls]
 "Homepage" = "https://github.com/the-pr-agent/pr-agent"

@@ -37,7 +37,8 @@ class PRSimilarIssue:
             try:
                 import pinecone
             except Exception as e:
-                raise Exception("Please install 'pinecone' and 'pinecone_datasets' to use pinecone as vectordb") from e
+                raise Exception("Pinecone vectordb requires extra packages. Install them with `pip install pinecone-client "
+                                "\"pinecone-datasets @ git+https://github.com/mrT23/pinecone-datasets.git@main\"`.") from e
             # assuming pinecone api key and environment are set in secrets file
             try:
                 api_key = get_settings().pinecone.api_key
@@ -112,7 +113,7 @@ class PRSimilarIssue:
             try:
                 import lancedb  # import lancedb only if needed
             except Exception as e:
-                raise Exception("Please install lancedb to use lancedb as vectordb") from e
+                raise Exception("LanceDB vectordb is not installed. Install it with `pip install \"pr-agent[lancedb]\"`.") from e
             self.db = lancedb.connect(get_settings().lancedb.uri)
             self.table = None
 
@@ -178,7 +179,7 @@ class PRSimilarIssue:
                 import qdrant_client
                 from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, VectorParams
             except Exception as e:
-                raise Exception("Please install qdrant-client to use qdrant as vectordb") from e
+                raise Exception("Qdrant vectordb is not installed. Install it with `pip install \"pr-agent[qdrant]\"`.") from e
 
             api_key = None
             url = None

@@ -2,6 +2,7 @@ _LANGCHAIN_INSTALLED = False
 
 try:
     from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.runnables import Runnable
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
     _LANGCHAIN_INSTALLED = True
 except Exception:  # we don't enforce langchain as a dependency, so if it's not installed, just move on
@@ -9,7 +10,6 @@ except Exception:  # we don't enforce langchain as a dependency, so if it's not 
 
 
 import openai
-from langchain_core.runnables import Runnable
 from tenacity import retry, retry_if_exception_type, retry_if_not_exception_type, stop_after_attempt
 
 from pr_agent.algo.ai_handlers.base_ai_handler import BaseAiHandler, make_api_error
@@ -22,7 +22,7 @@ OPENAI_RETRIES = 5
 class LangChainOpenAIHandler(BaseAiHandler):
     def __init__(self):
         if not _LANGCHAIN_INSTALLED:
-            error_msg = "LangChain is not installed. Please install it with `pip install langchain`."
+            error_msg = "LangChain is not installed. Install it with `pip install \"pr-agent[langchain]\"`."
             get_logger().error(error_msg)
             raise ImportError(error_msg)
 
