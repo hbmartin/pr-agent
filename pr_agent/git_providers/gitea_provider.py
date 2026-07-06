@@ -11,7 +11,7 @@ from pr_agent.algo.language_handler import is_valid_file
 from pr_agent.algo.types import EDIT_TYPE
 from pr_agent.algo.utils import clip_tokens, find_line_number_of_relevant_line_in_file
 from pr_agent.config_loader import get_settings
-from pr_agent.git_providers.git_provider import MAX_FILES_ALLOWED_FULL, FilePatchInfo, GitProvider, IncrementalPR
+from pr_agent.git_providers.git_provider import MAX_FILES_ALLOWED_FULL, FilePatchInfo, GitProvider
 from pr_agent.log import get_logger
 
 
@@ -59,10 +59,10 @@ class GiteaProvider(GitProvider):
         self.file_contents = {}
         self.file_diffs = {}
         self.sha = None
+        self.base_sha = ""
+        self.base_ref = ""
         self.diff_files = []
-        self.incremental = IncrementalPR(False)
         self.comments_list = []
-        self.unreviewed_files_set = dict()
 
         if "pulls" in url:
             self.pr_url = url
@@ -462,7 +462,7 @@ class GiteaProvider(GitProvider):
             head_file = ""
             base_file = ""
 
-            if counter_valid >= MAX_FILES_ALLOWED_FULL and patch and not self.incremental.is_incremental:
+            if counter_valid >= MAX_FILES_ALLOWED_FULL and patch:
                 avoid_load = True
                 if counter_valid == MAX_FILES_ALLOWED_FULL:
                     self.logger.info("Too many files in PR, will avoid loading full content for rest of files")
@@ -473,14 +473,10 @@ class GiteaProvider(GitProvider):
                 # Get file content from this pr
                 head_file = self.file_contents.get(filename,"")
 
-            if self.incremental.is_incremental and self.unreviewed_files_set:
-                base_file = self._get_file_content_from_latest_commit(filename)
-                self.unreviewed_files_set[filename] = patch
+            if avoid_load:
+                base_file = ""
             else:
-                if avoid_load:
-                    base_file = ""
-                else:
-                    base_file = self._get_file_content_from_base(filename)
+                base_file = self._get_file_content_from_base(filename)
 
             num_plus_lines = file.get("additions",0)
             num_minus_lines = file.get("deletions",0)
@@ -742,6 +738,45 @@ class GiteaProvider(GitProvider):
         clone_url += f"{gitea_token}@{base_url}{repo_full_name}"
         return clone_url
 
+    def get_repo_file_content(self, file_path: str, from_default_branch: bool = False) -> str:
+        """Get content of a file from the PR target (base) branch.
+
+        This method implements the interface required by PR #2387 repo_context feature.
+        It reads only from the PR target ref (base sha/ref) and never from the PR head,
+        so a PR cannot supply its own instruction files to influence its own review.
+        When from_default_branch is set, it reads from the repository default branch instead.
+        """
+        try:
+            if not self.owner or not self.repo:
+                self.logger.warning("Cannot get repo file content: owner or repo not set")
+                return ""
+
+            if from_default_branch:
+                ref = self.repo_api.repo_get(self.owner, self.repo).default_branch
+            else:
+                # Only trust the PR target (base) ref — never fall back to the PR head (self.sha).
+                ref = self.base_sha or self.base_ref
+            if not ref:
+                self.logger.warning("Cannot get repo file content: no target/base ref available")
+                return ""
+
+            content = self.repo_api.get_file_content(
+                owner=self.owner,
+                repo=self.repo,
+                commit_sha=ref,
+                filepath=file_path,
+                raise_on_error=True,
+            )
+            return content
+        except ApiException as e:
+            # A missing file is an expected "no context" outcome. Let transient/unexpected
+            # errors propagate so build_repo_context() treats them as a fetch error and does
+            # not cache an empty result until the TTL expires.
+            if getattr(e, "status", None) == 404:
+                return ""
+            raise
+
+
 class RepoApi(giteapy.RepositoryApi):
     def __init__(self, client: giteapy.ApiClient):
         self.repository = giteapy.RepositoryApi(client)
@@ -918,7 +953,14 @@ class RepoApi(giteapy.RepositoryApi):
             self.logger.error(f"Unexpected error: {e}")
             return {}
 
-    def get_file_content(self, owner: str, repo: str, commit_sha: str, filepath: str) -> str:
+    def get_file_content(
+        self,
+        owner: str,
+        repo: str,
+        commit_sha: str,
+        filepath: str,
+        raise_on_error: bool = False,
+    ) -> str:
         """Get raw file content from a specific commit"""
 
         try:
@@ -954,9 +996,13 @@ class RepoApi(giteapy.RepositoryApi):
 
         except ApiException as e:
             self.logger.error(f"Error getting file: {filepath}, content: {e}")
+            if raise_on_error:
+                raise
             return ""
         except Exception as e:
             self.logger.error(f"Unexpected error: {e}")
+            if raise_on_error:
+                raise
             return ""
 
     def get_issue_labels(self, owner: str, repo: str, issue_number: int):

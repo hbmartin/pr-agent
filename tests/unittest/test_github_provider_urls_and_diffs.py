@@ -86,6 +86,18 @@ class TestParsePrUrl:
             p._parse_pr_url("https://github.com/owner")
 
 
+class TestGetFiles:
+    def test_incremental_returns_list_not_dict_values_view(self):
+        p = _bare_provider()
+        p.incremental = SimpleNamespace(is_incremental=True)
+        p.unreviewed_files_map = {"a.py": "file-a", "b.py": "file-b"}
+
+        files = p.get_files()
+
+        assert files == ["file-a", "file-b"]
+        assert isinstance(files, list)
+
+
 # ---------------------------------------------------------------------------
 # _parse_issue_url
 # ---------------------------------------------------------------------------
