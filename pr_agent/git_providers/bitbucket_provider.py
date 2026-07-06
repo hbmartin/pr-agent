@@ -185,9 +185,6 @@ class BitbucketProvider(GitProvider):
             get_logger().error(f"Bitbucket failed to publish code suggestion, error: {e}")
             return False
 
-    def publish_file_comments(self, file_comments: list) -> bool:
-        pass
-
     def _is_supported(self, capability: str) -> bool:
         if capability in ['get_issue_comments', 'publish_inline_comments', 'get_labels', 'gfm_markdown',
                             'publish_file_comments']:
@@ -224,7 +221,7 @@ class BitbucketProvider(GitProvider):
                 names_original = [d.new.path for d in diffs_original]
                 names_kept = [d.new.path for d in diffs]
                 names_filtered = list(set(names_original) - set(names_kept))
-                get_logger().info(f"Filtered out [ignore] files for PR", extra={
+                get_logger().info("Filtered out [ignore] files for PR", extra={
                     'original_files': names_original,
                     'names_kept': names_kept,
                     'names_filtered': names_filtered
@@ -314,7 +311,7 @@ class BitbucketProvider(GitProvider):
                 else:
                     if counter_valid == MAX_FILES_ALLOWED_FULL // 2:
                         get_logger().info(
-                            f"Bitbucket too many files in PR, will avoid loading full content for rest of files")
+                            "Bitbucket too many files in PR, will avoid loading full content for rest of files")
                     original_file_content_str = ""
                     new_file_content_str = ""
             except Exception as e:
@@ -396,13 +393,6 @@ class BitbucketProvider(GitProvider):
         except Exception as e:
             get_logger().exception(f"Failed to update comment, error: {e}")
 
-    def remove_initial_comment(self):
-        try:
-            for comment in self.temp_comments:
-                self.remove_comment(comment)
-        except Exception as e:
-            get_logger().exception(f"Failed to remove temp comments, error: {e}")
-
     def remove_comment(self, comment):
         try:
             self.pr.delete(f"comments/{comment}")
@@ -481,9 +471,6 @@ class BitbucketProvider(GitProvider):
             else:
                 get_logger().error(f"Could not publish inline comment {comment}")
 
-    def get_title(self):
-        return self.pr.title
-
     def get_languages(self):
         languages = {self._get_repo().get_data("language"): 0}
         return languages
@@ -504,22 +491,10 @@ class BitbucketProvider(GitProvider):
     def get_pr_owner_id(self) -> str | None:
         return self.workspace_slug
 
-    def get_pr_description_full(self):
-        return self.pr.description
-
-    def get_user_id(self):
-        return 0
-
     def get_issue_comments(self):
         raise NotImplementedError(
             "Bitbucket provider does not support issue comments yet"
         )
-
-    def add_eyes_reaction(self, issue_comment_id: int, disable_eyes: bool = False) -> Optional[int]:
-        return True
-
-    def remove_reaction(self, issue_comment_id: int, reaction_id: int) -> bool:
-        return True
 
     @staticmethod
     def _parse_pr_url(pr_url: str) -> Tuple[str, int, int]:
@@ -567,7 +542,8 @@ class BitbucketProvider(GitProvider):
                 return ""
             contents = response.text
             return contents
-        except Exception:
+        except Exception as e:
+            get_logger().debug(f"Failed to get file content for {file_path} on branch {branch}: {e}")
             return ""
 
     def create_or_update_pr_file(self, file_path: str, branch: str, contents="", message="") -> None:
@@ -595,11 +571,9 @@ class BitbucketProvider(GitProvider):
                 return ""
             contents = response.text
             return contents
-        except Exception:
+        except Exception as e:
+            get_logger().debug(f"Failed to get PR file content from {remote_link}: {e}")
             return ""
-
-    def get_commit_messages(self):
-        return ""  # not implemented yet
 
     # bitbucket does not support labels
     def publish_description(self, pr_title: str, description: str):
@@ -617,12 +591,7 @@ class BitbucketProvider(GitProvider):
         return response
 
     # bitbucket does not support labels
-    def publish_labels(self, pr_types: list):
-        pass
-
     # bitbucket does not support labels
-    def get_pr_labels(self, update=False):
-        pass
     #Clone related
     def _prepare_clone_url_with_token(self, repo_url_to_clone: str) -> str | None:
         if "bitbucket.org" not in repo_url_to_clone:

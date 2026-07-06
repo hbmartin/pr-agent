@@ -132,25 +132,10 @@ class LocalGitProvider(GitProvider):
     def publish_code_suggestions(self, code_suggestions: list) -> bool:
         raise NotImplementedError('Publishing code suggestions is not implemented for the local git provider')
 
-    def publish_labels(self, labels):
-        pass  # Not applicable to the local git provider, but required by the interface
-
-    def remove_initial_comment(self):
-        pass  # Not applicable to the local git provider, but required by the interface
-
     def remove_comment(self, comment):
         pass  # Not applicable to the local git provider, but required by the interface
 
-    def add_eyes_reaction(self, comment):
-        pass  # Not applicable to the local git provider, but required by the interface
-
-    def get_commit_messages(self):
-        pass  # Not applicable to the local git provider, but required by the interface
-
     def get_repo_settings(self):
-        pass  # Not applicable to the local git provider, but required by the interface
-
-    def remove_reaction(self, comment):
         pass  # Not applicable to the local git provider, but required by the interface
 
     def get_languages(self):

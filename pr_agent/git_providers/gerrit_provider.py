@@ -19,7 +19,7 @@ from pr_agent.git_providers.local_git_provider import PullRequestMimic
 from pr_agent.log import get_logger
 
 
-def _call(*command, **kwargs) -> (int, str, str):
+def _call(*command, **kwargs) -> str:
     res = subprocess.run(
         command,
         stdout=subprocess.PIPE,
@@ -383,16 +383,6 @@ class GerritProvider(GitProvider):
             'Publishing inline comments is not implemented for the gerrit '
             'provider')
 
-
-    def publish_labels(self, labels):
-        # Not applicable to the local git provider,
-        # but required by the interface
-        pass
-
-    def remove_initial_comment(self):
-        # remove repo, cloned in previous steps
-        # shutil.rmtree(self.repo_path)
-        pass
 
     def remove_comment(self, comment):
         pass

@@ -1,26 +1,45 @@
 import difflib
-import hashlib
 import re
 import urllib.parse
-from typing import Any, Optional, Tuple, Union
-from urllib.parse import parse_qs, urlparse
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from typing import Optional, Tuple
+from urllib.parse import urlparse
 
 import gitlab
-import requests
-from gitlab import (GitlabAuthenticationError, GitlabCreateError,
-                    GitlabGetError, GitlabUpdateError)
+from gitlab import GitlabAuthenticationError, GitlabCreateError, GitlabGetError, GitlabUpdateError
 
 from pr_agent.algo.types import EDIT_TYPE, FilePatchInfo
 
 from ..algo.file_filter import filter_ignored
 from ..algo.git_patch_processing import decode_if_bytes
 from ..algo.language_handler import is_valid_file
-from ..algo.utils import (clip_tokens,
-                          find_line_number_of_relevant_line_in_file,
-                          load_large_diff)
+from ..algo.utils import PRReviewHeader, clip_tokens, find_line_number_of_relevant_line_in_file, load_large_diff
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import MAX_FILES_ALLOWED_FULL, GitProvider
+from .git_provider import MAX_FILES_ALLOWED_FULL, GitProvider, IncrementalPR
+
+
+def _to_naive_utc(timestamp: str) -> datetime:
+    """GitLab returns ISO-8601 timestamps with offsets; normalize to naive UTC so they
+    compare against the naive datetime.now() thresholds used by the review tool."""
+    parsed = datetime.fromisoformat(timestamp)
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+class _IncrementalCommit:
+    """Adapts a GitLab commit to the (GitHub-commit-shaped) attributes read by
+    IncrementalPR and the review tool's thresholds: .sha and .commit.author.date."""
+
+    def __init__(self, gitlab_commit):
+        self.sha = gitlab_commit.id
+        message = getattr(gitlab_commit, "message", None) or getattr(gitlab_commit, "title", "") or ""
+        self.commit = SimpleNamespace(
+            author=SimpleNamespace(date=_to_naive_utc(gitlab_commit.created_at)),
+            message=message,
+        )
 
 
 class DiffNotFoundError(Exception):
@@ -76,6 +95,8 @@ class GitLabProvider(GitProvider):
         self.RE_HUNK_HEADER = re.compile(
             r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)")
         self.incremental = incremental
+        self.pr_commits = None
+        self.previous_review = None
 
     # --- submodule expansion helpers (opt-in) ---
     def _get_gitmodules_map(self) -> dict[str, str]:
@@ -201,8 +222,8 @@ class GitLabProvider(GitProvider):
                     return self.gl.projects.get(p.id)
             if matches:
                 get_logger().warning(f"[submodule] no exact match for {proj_path} (skip)")
-        except Exception:
-            pass
+        except Exception as e:
+            get_logger().debug(f"[submodule] project search fallback failed for {proj_path}: {e}")
 
         return None
 
@@ -410,6 +431,8 @@ class GitLabProvider(GitProvider):
         # filter files using [ignore] patterns
         raw_changes = self.mr.changes().get('changes', [])
         raw_changes = self._expand_submodule_changes(raw_changes)
+        if self._is_incremental_review() and self.unreviewed_files_set:
+            raw_changes = [c for c in raw_changes if c.get('new_path') in self.unreviewed_files_set]
         diffs_original = raw_changes
         diffs = filter_ignored(diffs_original, 'gitlab')
         if diffs != diffs_original:
@@ -438,7 +461,7 @@ class GitLabProvider(GitProvider):
                 new_file_content_str = self.get_pr_file_content(diff['new_path'], self.mr.diff_refs['head_sha'])
             else:
                 if counter_valid == MAX_FILES_ALLOWED_FULL:
-                    get_logger().info(f"Too many files in PR, will avoid loading full content for rest of files")
+                    get_logger().info("Too many files in PR, will avoid loading full content for rest of files")
                 original_file_content_str = ''
                 new_file_content_str = ''
 
@@ -479,11 +502,87 @@ class GitLabProvider(GitProvider):
         return diff_files
 
     def get_files(self) -> list:
+        if self._is_incremental_review() and self.unreviewed_files_set:
+            return list(self.unreviewed_files_set.keys())
         if not self.git_files:
             raw_changes = self.mr.changes().get('changes', [])
             raw_changes = self._expand_submodule_changes(raw_changes)
             self.git_files = [c.get('new_path') for c in raw_changes if c.get('new_path')]
         return self.git_files
+
+    # --- incremental review (/review -i) ---
+    def _is_incremental_review(self) -> bool:
+        # self.incremental starts as a plain bool constructor arg and becomes an
+        # IncrementalPR once get_incremental_commits is called
+        return bool(getattr(self.incremental, "is_incremental", False)) \
+            and getattr(self, "unreviewed_files_set", None) is not None
+
+    def get_incremental_commits(self, incremental=IncrementalPR(False)):
+        self.incremental = incremental
+        if self.incremental.is_incremental:
+            self.unreviewed_files_set = dict()
+            self._get_incremental_commits()
+
+    def _get_incremental_commits(self):
+        if not self.pr_commits:
+            commits = [_IncrementalCommit(c) for c in self.mr.commits(get_all=True)]
+            commits.sort(key=lambda c: c.commit.author.date)  # oldest -> newest, like GitHub
+            self.pr_commits = commits
+
+        self.previous_review = self.get_previous_review(full=True, incremental=True)
+        if not self.previous_review:
+            get_logger().info("No previous review found, will review the entire MR")
+            self.incremental.is_incremental = False
+            return
+
+        self.incremental.commits_range = self.get_commit_range()
+        project = self.gl.projects.get(self.id_project)
+        default_branch = getattr(project, "default_branch", None)
+        for commit in self.incremental.commits_range:
+            if default_branch and commit.commit.message.startswith(f"Merge branch '{default_branch}'"):
+                get_logger().info(f"Skipping merge commit {commit.commit.message}")
+                continue
+            try:
+                commit_diffs = project.commits.get(commit.sha).diff(get_all=True)
+            except Exception as e:
+                get_logger().warning(f"Failed to get diff for commit {commit.sha}: {e}")
+                continue
+            for commit_diff in commit_diffs:
+                path = commit_diff.get('new_path') or commit_diff.get('old_path')
+                if path:
+                    self.unreviewed_files_set[path] = commit_diff
+
+    def get_commit_range(self):
+        last_review_time = _to_naive_utc(self.previous_review.created_at)
+        first_new_commit_index = None
+        for index in range(len(self.pr_commits) - 1, -1, -1):
+            if self.pr_commits[index].commit.author.date > last_review_time:
+                self.incremental.first_new_commit = self.pr_commits[index]
+                first_new_commit_index = index
+            else:
+                self.incremental.last_seen_commit = self.pr_commits[index]
+                break
+        return self.pr_commits[first_new_commit_index:] if first_new_commit_index is not None else []
+
+    def get_previous_review(self, *, full: bool, incremental: bool):
+        if not (full or incremental):
+            raise ValueError("At least one of full or incremental must be True")
+        prefixes = []
+        if full:
+            prefixes.append(PRReviewHeader.REGULAR.value)
+        if incremental:
+            prefixes.append(PRReviewHeader.INCREMENTAL.value)
+        latest_review = None
+        for note in self.mr.notes.list(get_all=True):
+            body = getattr(note, "body", "") or ""
+            if not any(body.startswith(prefix) for prefix in prefixes):
+                continue
+            if latest_review is None or _to_naive_utc(note.created_at) > _to_naive_utc(latest_review.created_at):
+                latest_review = note
+        return latest_review
+
+    def get_incremental_review_url(self, commit_sha: str) -> str:
+        return f"{self.mr.web_url}/diffs?commit_id={commit_sha}"
 
     def publish_description(self, pr_title: str, pr_body: str):
         try:
@@ -611,7 +710,7 @@ class GitLabProvider(GitProvider):
                     link = self.get_line_link(relevant_file, line_start, line_end)
                     body_fallback =f"**Suggestion:** {content} [{label}, importance: {score}]\n\n"
                     body_fallback +=f"\n\n<details><summary>[{target_file.filename} [{line_start}-{line_end}]]({link}):</summary>\n\n"
-                    body_fallback += f"\n\n___\n\n`(Cannot implement directly - GitLab API allows committable suggestions strictly on MR diff lines)`"
+                    body_fallback += "\n\n___\n\n`(Cannot implement directly - GitLab API allows committable suggestions strictly on MR diff lines)`"
                     body_fallback+="</details>\n\n"
                     diff_patch = difflib.unified_diff(old_code_snippet.split('\n'),
                                                 new_code_snippet.split('\n'), n=999)
@@ -700,9 +799,6 @@ class GitLabProvider(GitProvider):
         # note that we publish suggestions one-by-one. so, if one fails, the rest will still be published
         return True
 
-    def publish_file_comments(self, file_comments: list) -> bool:
-        pass
-
     def search_line(self, relevant_file, relevant_line_in_file):
         target_file = None
 
@@ -756,13 +852,6 @@ class GitLabProvider(GitProvider):
         elif relevant_line_in_file[0] == '+':
             edit_type = 'addition'
         return edit_type
-
-    def remove_initial_comment(self):
-        try:
-            for comment in self.temp_comments:
-                self.remove_comment(comment)
-        except Exception as e:
-            get_logger().exception(f"Failed to remove temp comments, error: {e}")
 
     def remove_comment(self, comment):
         try:
@@ -913,7 +1002,8 @@ class GitLabProvider(GitProvider):
         try:
             commit_messages_list = [commit['message'] for commit in self.mr.commits()._list]
             commit_messages_str = "\n".join([f"{i + 1}. {message}" for i, message in enumerate(commit_messages_list)])
-        except Exception:
+        except Exception as e:
+            get_logger().warning(f"Failed to retrieve commit messages for MR: {e}")
             commit_messages_str = ""
         if max_tokens:
             commit_messages_str = clip_tokens(commit_messages_str, max_tokens)

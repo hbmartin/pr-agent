@@ -49,6 +49,16 @@ extra_instructions = "..."
 - The `pr_commands` lists commands that will be executed automatically when a PR is opened.
 - The `[pr_reviewer]` section contains the configurations for the `review` tool you want to edit (if any).
 
+### Incremental review
+
+On GitHub and GitLab you can review only the commits pushed since the last review, instead of the full PR:
+
+```
+/review -i
+```
+
+The tool locates the last PR-Agent review comment, collects the commits (and the files they touch) added after it, and reviews just that delta. If no previous review exists, it falls back to a full review. The `[pr_reviewer]` options `minimal_commits_for_incremental_review` and `minimal_minutes_for_incremental_review` set thresholds below which an automatic incremental review is skipped (`require_all_thresholds_for_incremental_review` controls whether both must hold). To make push-triggered reviews incremental, use `push_commands = ["/review -i"]`.
+
 ## Configuration options
 
 ???+ example "General options"

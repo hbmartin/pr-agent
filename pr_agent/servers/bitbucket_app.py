@@ -6,8 +6,8 @@ import os
 import re
 import time
 
+import aiohttp
 import jwt
-import requests
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request, Response
 from starlette.background import BackgroundTasks
@@ -24,6 +24,7 @@ from pr_agent.identity_providers import get_identity_provider
 from pr_agent.identity_providers.identity_provider import Eligibility
 from pr_agent.log import LoggingFormat, get_logger, setup_logger
 from pr_agent.secret_providers import get_secret_provider
+from pr_agent.servers.metrics import setup_metrics
 
 setup_logger(fmt=LoggingFormat.JSON, level=get_settings().get("CONFIG.LOG_LEVEL", "DEBUG"))
 router = APIRouter()
@@ -51,8 +52,9 @@ async def get_bearer_token(shared_secret: str, client_key: str):
             'Authorization': f'JWT {token}',
             'Content-Type': 'application/x-www-form-urlencoded'
         }
-        response = requests.request("POST", url, headers=headers, data=payload)
-        bearer_token = response.json()["access_token"]
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+            async with session.post(url, headers=headers, data=payload) as response:
+                bearer_token = (await response.json())["access_token"]
         return bearer_token
     except Exception as e:
         get_logger().error(f"Failed to get bearer token: {e}")
@@ -101,13 +103,14 @@ async def _validate_time_from_last_commit_to_pr_update(data: dict) -> bool:
             'Authorization': f'Bearer {bearer_token}',
             'Accept': 'application/json'
         }
-        response = requests.get(commits_api, headers=headers, timeout=30)
-        if response.status_code != 200:
-            get_logger().warning(f"Bitbucket commits API returned {response.status_code} for {commits_api}")
-            return False
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+            async with session.get(commits_api, headers=headers) as response:
+                if response.status != 200:
+                    get_logger().warning(f"Bitbucket commits API returned {response.status} for {commits_api}")
+                    return False
+                commits_data = (await response.json()) or {}
 
         username =_get_username(data)
-        commits_data = response.json() or {}
         values = commits_data.get('values') or []
         if (not values or not isinstance(values, list) or not values[0].get('author') or not values[0]['author'].get('user')
                 or not values[0]['author']['user'].get('display_name')):
@@ -129,10 +132,10 @@ async def _validate_time_from_last_commit_to_pr_update(data: dict) -> bool:
         if diff > 0 and diff < max_delta_seconds:
             is_valid_push = True
         else:
-            get_logger().debug(f"Too much time passed since last commit",
+            get_logger().debug("Too much time passed since last commit",
                                artifact={'updated': time_pr_updated, 'last_commit': time_last_commit})
     except Exception as e:
-        get_logger().exception(f"Failed to validate time difference between last commit and PR update",
+        get_logger().exception("Failed to validate time difference between last commit and PR update",
                                artifact={'error': e, 'data': data})
     return is_valid_push
 
@@ -154,7 +157,7 @@ async def _perform_commands_bitbucket(commands_conf: str, agent: PRAgent, api_ur
     if commands_conf == "push_commands":
         is_valid_push = await _validate_time_from_last_commit_to_pr_update(data)
         if not is_valid_push:
-            get_logger().info(f"Bitbucket skipping 'pullrequest:updated' for push commands")
+            get_logger().info("Bitbucket skipping 'pullrequest:updated' for push commands")
             return
     for command in commands:
         try:
@@ -308,7 +311,7 @@ async def handle_github_webhooks(background_tasks: BackgroundTasks, request: Req
     return "OK"
 
 @router.get("/webhook")
-async def handle_github_webhooks(request: Request, response: Response):
+async def webhook_health(request: Request, response: Response):
     return "Webhook server online!"
 
 @router.post("/installed")
@@ -345,6 +348,7 @@ def start():
     middleware = [Middleware(RawContextMiddleware)]
     app = FastAPI(middleware=middleware)
     app.include_router(router)
+    setup_metrics(app)
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "3000")))
 

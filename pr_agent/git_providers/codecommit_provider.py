@@ -221,9 +221,6 @@ class CodeCommitProvider(GitProvider):
     def get_pr_labels(self, update=False):
         return [""]  # not implemented yet
 
-    def remove_initial_comment(self):
-        return ""  # not implemented yet
-
     def remove_comment(self, comment):
         return ""  # not implemented yet
 
@@ -233,9 +230,6 @@ class CodeCommitProvider(GitProvider):
 
     def publish_inline_comments(self, comments: list[dict]):
         raise NotImplementedError("CodeCommit provider does not support publishing inline comments yet")
-
-    def get_title(self):
-        return self.pr.title
 
     def get_pr_id(self):
         """
@@ -285,9 +279,6 @@ class CodeCommitProvider(GitProvider):
     def get_pr_branch(self):
         return self.pr.source_branch
 
-    def get_pr_description_full(self) -> str:
-        return self.pr.description
-
     def get_user_id(self):
         return -1  # not implemented yet
 
@@ -298,14 +289,6 @@ class CodeCommitProvider(GitProvider):
         # a local ".pr_agent.toml" settings file is optional
         settings_filename = ".pr_agent.toml"
         return self.codecommit_client.get_file(self.repo_name, settings_filename, self.pr.source_commit, optional=True)
-
-    def add_eyes_reaction(self, issue_comment_id: int, disable_eyes: bool = False) -> Optional[int]:
-        get_logger().info("CodeCommit provider does not support eyes reaction yet")
-        return True
-
-    def remove_reaction(self, issue_comment_id: int, reaction_id: int) -> bool:
-        get_logger().info("CodeCommit provider does not support removing reactions yet")
-        return True
 
     @staticmethod
     def _parse_pr_url(pr_url: str) -> Tuple[str, int]:
@@ -384,9 +367,6 @@ class CodeCommitProvider(GitProvider):
         mimic.destination_branch = response.targets[0].destination_branch
 
         return mimic
-
-    def get_commit_messages(self):
-        return ""  # not implemented yet
 
     @staticmethod
     def _add_additional_newlines(body: str) -> str:

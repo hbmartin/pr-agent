@@ -11,24 +11,27 @@ from datetime import datetime
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
-from github import AppAuthentication, Auth, Github, GithubException
+from github import Auth, Github, GithubException
 from github.Issue import Issue
 from starlette_context import context
-from tenacity import (Retrying, retry_if_exception_type, stop_after_attempt,
-                      wait_exponential, wait_random)
+from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential, wait_random
 
 from ..algo.file_filter import filter_ignored
 from ..algo.git_patch_processing import extract_hunk_headers
 from ..algo.language_handler import is_valid_file
 from ..algo.types import EDIT_TYPE
-from ..algo.utils import (PRReviewHeader, Range, clip_tokens,
-                          find_line_number_of_relevant_line_in_file,
-                          load_large_diff, set_file_languages)
+from ..algo.utils import (
+    PRReviewHeader,
+    Range,
+    clip_tokens,
+    find_line_number_of_relevant_line_in_file,
+    load_large_diff,
+    set_file_languages,
+)
 from ..config_loader import get_settings
 from ..log import get_logger
 from ..servers.utils import RateLimitExceeded
-from .git_provider import (MAX_FILES_ALLOWED_FULL, FilePatchInfo, GitProvider,
-                           IncrementalPR)
+from .git_provider import MAX_FILES_ALLOWED_FULL, FilePatchInfo, GitProvider, IncrementalPR
 
 
 def _next_page_url(headers: dict) -> str:
@@ -151,7 +154,7 @@ class GithubProvider(GitProvider):
             scheme_and_netloc = self.base_url_html
             desired_branch = self.repo_obj.default_branch
         if not all([scheme_and_netloc, owner, repo]): #"else": Not invoked from a PR context,but no provided git url for context
-            get_logger().error(f"Unable to get canonical url parts since missing context (PR or explicit git url)")
+            get_logger().error("Unable to get canonical url parts since missing context (PR or explicit git url)")
             return ("", "")
 
         prefix = f"{scheme_and_netloc}/{owner}/{repo}/blob/{desired_branch}"
@@ -269,7 +272,7 @@ class GithubProvider(GitProvider):
                 try:
                     names_original = [file.filename for file in files_original]
                     names_new = [file.filename for file in files]
-                    get_logger().info(f"Filtered out [ignore] files for pull request:", extra=
+                    get_logger().info("Filtered out [ignore] files for pull request:", extra=
                     {"files": names_original,
                      "filtered_files": names_new})
                 except Exception:
@@ -312,7 +315,7 @@ class GithubProvider(GitProvider):
                     if counter_valid >= MAX_FILES_ALLOWED_FULL and patch and not self.incremental.is_incremental:
                         avoid_load = True
                         if counter_valid == MAX_FILES_ALLOWED_FULL:
-                            get_logger().info(f"Too many files in PR, will avoid loading full content for rest of files")
+                            get_logger().info("Too many files in PR, will avoid loading full content for rest of files")
 
                     if avoid_load:
                         new_file_content_str = ""
@@ -452,7 +455,7 @@ class GithubProvider(GitProvider):
             self._check_run_ids[name] = data["id"]
             return True
         except Exception:
-            get_logger().warning(f"Failed to create check run, falling back to comment")
+            get_logger().warning("Failed to create check run, falling back to comment")
             return False
 
     def _find_existing_check_run(self, check_run_name: str, head_sha: str) -> Optional[int]:
@@ -519,7 +522,7 @@ class GithubProvider(GitProvider):
             # publish all comments in a single message
             self.pr.create_review(commit=self.last_commit_id, comments=comments)
         except Exception as e:
-            get_logger().info(f"Initially failed to publish inline comments as committable")
+            get_logger().info("Initially failed to publish inline comments as committable")
 
             if (getattr(e, "status", None) == 422 and not disable_fallback):
                 pass  # continue to try _publish_inline_comments_fallback_with_verification
@@ -563,7 +566,7 @@ class GithubProvider(GitProvider):
             return thread_comments
                 
         except Exception as e:
-            get_logger().exception(f"Failed to get review comments for an inline ask command", artifact={"comment_id": comment_id, "error": e})
+            get_logger().exception("Failed to get review comments for an inline ask command", artifact={"comment_id": comment_id, "error": e})
             return []
 
     def _publish_inline_comments_fallback_with_verification(self, comments: list[dict]):
@@ -578,8 +581,8 @@ class GithubProvider(GitProvider):
         if verified_comments:
             try:
                 self.pr.create_review(commit=self.last_commit_id, comments=verified_comments)
-            except:
-                pass
+            except Exception as e:
+                get_logger().error(f"Failed to publish group of verified inline comments: {e}")
 
         # try to publish one by one the invalid comments as a one-line code comment
         if invalid_comments and get_settings().github.try_fix_invalid_inline_comments:
@@ -609,8 +612,8 @@ class GithubProvider(GitProvider):
         if pending_review_id is not None:
             try:
                 self.pr._requester.requestJsonAndCheck("DELETE", f"{self.pr.url}/reviews/{pending_review_id}")
-            except Exception:
-                pass
+            except Exception as e:
+                get_logger().debug(f"Failed to delete pending review {pending_review_id}: {e}")
         return is_verified, e
 
     def _verify_code_comments(self, comments: list[dict]) -> tuple[list[dict], list[tuple[dict, Exception]]]:
@@ -711,7 +714,7 @@ class GithubProvider(GitProvider):
                     "Failed to edit github comment due to permission restrictions",
                     artifact={"error": e})
             else:
-                get_logger().exception(f"Failed to edit github comment", artifact={"error": e})
+                get_logger().exception("Failed to edit github comment", artifact={"error": e})
 
     def edit_comment_from_comment_id(self, comment_id: int, body: str):
         try:
@@ -952,9 +955,7 @@ class GithubProvider(GitProvider):
                 raise ValueError("GitHub app ID and private key are required when using GitHub app deployment") from e
             if not self.installation_id:
                 raise ValueError("GitHub app installation ID is required when using GitHub app deployment")
-            auth = AppAuthentication(app_id=app_id, private_key=private_key,
-                                     installation_id=self.installation_id)
-            self.auth = auth
+            self.auth = Auth.AppAuth(app_id, private_key).get_installation_auth(self.installation_id)
         elif self.deployment_type == 'user':
             try:
                 token = get_settings().github.user_token
@@ -988,7 +989,8 @@ class GithubProvider(GitProvider):
                 .get_contents(file_path, ref=branch)
                 .decoded_content.decode()
             )
-        except Exception:
+        except Exception as e:
+            get_logger().debug(f"Failed to get file content for {file_path} on branch {branch}: {e}")
             file_content_str = ""
         return file_content_str
 
@@ -1056,7 +1058,8 @@ class GithubProvider(GitProvider):
             commit_list = self.pr.get_commits()
             commit_messages = [commit.commit.message for commit in commit_list]
             commit_messages_str = "\n".join([f"{i + 1}. {message}" for i, message in enumerate(commit_messages)])
-        except Exception:
+        except Exception as e:
+            get_logger().warning(f"Failed to retrieve commit messages for PR: {e}")
             commit_messages_str = ""
         if max_tokens:
             commit_messages_str = clip_tokens(commit_messages_str, max_tokens)
@@ -1217,9 +1220,6 @@ class GithubProvider(GitProvider):
         except Exception as e:
             get_logger().exception(f"Failed to auto-approve, error: {e}")
             return False
-
-    def calc_pr_statistics(self, pull_request_data: dict):
-            return {}
 
     def validate_comments_inside_hunks(self, code_suggestions):
         """
