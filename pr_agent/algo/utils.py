@@ -81,7 +81,7 @@ def unique_strings(input_list: List[str]) -> List[str]:
     return unique_list
 
 
-def convert_str_to_datetime(date_str):
+def convert_str_to_datetime(date_str: str) -> datetime:
     """
     Convert a string representation of a date and time into a datetime object.
 
@@ -116,7 +116,7 @@ def load_large_diff(filename, new_file_content_str: str, original_file_content_s
             get_logger().info(f"File was modified, but no patch was found. Manually creating patch: {filename}.")
         patch = ''.join(diff)
         return patch
-    except Exception as e:
+    except Exception:
         get_logger().exception(f"Failed to generate patch for file: {filename}")
         return ""
 
@@ -157,7 +157,7 @@ def update_settings_from_args(args: List[str]) -> List[str]:
     return other_args
 
 
-def _fix_key_value(key: str, value: str):
+def _fix_key_value(key: str, value: str) -> Tuple[str, Any]:
     key = key.strip().upper()
     value = value.strip()
     try:
@@ -167,7 +167,7 @@ def _fix_key_value(key: str, value: str):
     return key, value
 
 
-def set_custom_labels(variables, git_provider=None):
+def set_custom_labels(variables, git_provider=None) -> None:
     if not get_settings().config.enable_custom_labels:
         return
 
@@ -192,7 +192,7 @@ def set_custom_labels(variables, git_provider=None):
         counter += 1
     variables["labels_minimal_to_labels_dict"] = labels_minimal_to_labels_dict
 
-def get_user_labels(current_labels: List[str] = None):
+def get_user_labels(current_labels: List[str] = None) -> List[str]:
     """
     Only keep labels that has been added by the user
     """
@@ -230,7 +230,7 @@ def _get_litellm_max_input_tokens(model: str) -> Optional[int]:
     return None
 
 
-def get_max_tokens(model):
+def get_max_tokens(model: str) -> int:
     """
     Get the maximum number of tokens allowed for a model.
     logic:
@@ -468,6 +468,7 @@ def get_rate_limit_status(github_token) -> dict:
             if attempt:
                 raise
             time.sleep(0.1)  # transient failure: retry once through the same handling
+    raise RuntimeError("get_rate_limit_status: retries exhausted")  # unreachable; the last attempt re-raises
 
 
 def validate_rate_limit_github(github_token, installation_id=None, threshold=0.1) -> bool:
@@ -488,7 +489,7 @@ def validate_rate_limit_github(github_token, installation_id=None, threshold=0.1
         return True
 
 
-def validate_and_await_rate_limit(github_token):
+def validate_and_await_rate_limit(github_token) -> Optional[dict]:
     try:
         rate_limit_status = get_rate_limit_status(github_token)
         # validate that the rate limit is not exceeded
@@ -502,12 +503,12 @@ def validate_and_await_rate_limit(github_token):
                     time.sleep(sleep_time_sec + 1)
                 rate_limit_status = get_rate_limit_status(github_token)
         return rate_limit_status
-    except:
+    except Exception:
         get_logger().error("Error in rate limit")
         return None
 
 
-def github_action_output(output_data: dict, key_name: str):
+def github_action_output(output_data: dict, key_name: str) -> None:
     try:
         enable_output = get_settings().get('github_action_config.enable_output', False)
         if isinstance(enable_output, str):
@@ -548,7 +549,7 @@ def show_relevant_configurations(relevant_section: str) -> str:
     markdown_text += "\n</details>\n"
     return markdown_text
 
-def set_pr_string(repo_name, pr_number):
+def set_pr_string(repo_name: str, pr_number) -> str:
     return f"{repo_name}#{pr_number}"
 
 

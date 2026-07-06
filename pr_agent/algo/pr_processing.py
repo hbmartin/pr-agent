@@ -62,7 +62,7 @@ def get_pr_diff(git_provider: GitProvider, token_handler: TokenHandler,
     if pr_languages:
         try:
             get_logger().info(f"PR main language: {pr_languages[0]['language']}")
-        except Exception as e:
+        except Exception:
             pass
 
     # generate a standard diff string, with patch extension
@@ -156,7 +156,7 @@ def get_pr_diff_multiple_patchs(git_provider: GitProvider, token_handler: TokenH
     if pr_languages:
         try:
             get_logger().info(f"PR main language: {pr_languages[0]['language']}")
-        except Exception as e:
+        except Exception:
             pass
 
     patches_compressed_list, total_tokens_list, deleted_files_list, remaining_files_list, file_dict, files_in_patches_list = \
@@ -261,7 +261,7 @@ def pr_generate_compressed_diff(top_langs: list, token_handler: TokenHandler, mo
     # additional iterations (if needed)
     if large_pr_handling:
         NUMBER_OF_ALLOWED_ITERATIONS = get_settings().pr_description.get("max_ai_calls", 4) - 1 # one more call is to summarize
-        for i in range(NUMBER_OF_ALLOWED_ITERATIONS-1):
+        for _i in range(NUMBER_OF_ALLOWED_ITERATIONS-1):
             if remaining_files_list:
                 total_tokens, patches, remaining_files_list, files_in_patch_list = generate_full_patch(convert_hunks_to_line_numbers,
                                                                                  file_dict,
@@ -288,7 +288,7 @@ def generate_full_patch(convert_hunks_to_line_numbers, file_dict, max_tokens_mod
 
         patch = data['patch']
         new_patch_tokens = data['tokens']
-        edit_type = data['edit_type']
+        data['edit_type']
 
         # Hard Stop, no more tokens
         if total_tokens > max_tokens_model - OUTPUT_BUFFER_TOKENS_HARD_THRESHOLD:
@@ -322,7 +322,7 @@ async def retry_with_fallback_models(f: Callable, model_type: ModelType = ModelT
     all_models = _get_all_models(model_type)
     all_deployments = _get_all_deployments(all_models)
     # try each (model, deployment_id) pair until one is successful, otherwise raise exception
-    for i, (model, deployment_id) in enumerate(zip(all_models, all_deployments)):
+    for i, (model, deployment_id) in enumerate(zip(all_models, all_deployments, strict=False)):
         try:
             get_logger().debug(
                 f"Generating prediction with {model}"

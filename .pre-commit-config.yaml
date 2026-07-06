@@ -11,17 +11,16 @@ repos:
       - id: check-added-large-files
       - id: check-toml
       - id: check-yaml
+        # mkdocs-material uses custom python/name YAML tags that PyYAML cannot load
+        exclude: ^docs/mkdocs\.yml$
       - id: end-of-file-fixer
       - id: trailing-whitespace
   # - repo: https://github.com/rhysd/actionlint
   #   rev: v1.7.3
   #   hooks:
   #     - id: actionlint
-  - repo: https://github.com/pycqa/isort
-    # rev must match what's in dev-requirements.txt
-    rev: 5.13.2
-    hooks:
-      - id: isort
+  # Import sorting is enforced by ruff (I001/I002 in pyproject.toml); a separate
+  # isort hook disagrees with ruff's style and the two never converge.
   - repo: https://github.com/PyCQA/bandit
     rev: 1.8.6
     hooks:

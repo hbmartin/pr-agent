@@ -1,3 +1,8 @@
+> **Historical document.** This file stopped being maintained in December 2023 and is kept
+> only for archaeology. For current changes see the
+> [GitHub releases page](https://github.com/hbmartin/pr-agent/releases) and the
+> git history; the version in `pyproject.toml` is the source of truth.
+
 ## [Version 0.11] - 2023-12-07
 
 - codiumai/pr-agent:0.11

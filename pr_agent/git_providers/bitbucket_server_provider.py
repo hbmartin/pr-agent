@@ -16,7 +16,7 @@ from ..algo.types import EDIT_TYPE, FilePatchInfo
 from ..algo.utils import find_line_number_of_relevant_line_in_file, load_large_diff
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import GitProvider, get_git_ssl_env
+from .git_provider import REPO_SETTINGS_FILENAME, GitProvider, get_git_ssl_env
 
 
 class BitbucketServerProvider(GitProvider):
@@ -46,7 +46,7 @@ class BitbucketServerProvider(GitProvider):
             self.bitbucket_server_url = self._parse_bitbucket_server(pr_url)
             if not self.bitbucket_server_url:
                 raise ValueError("Invalid or missing Bitbucket Server URL parsed from PR URL.")
-            
+
             if self.bearer_token:  # if bearer token is provided, use it
                 self.bitbucket_client = Bitbucket(
                     url=self.bitbucket_server_url,
@@ -70,7 +70,7 @@ class BitbucketServerProvider(GitProvider):
         try:
             parsed_url = urlparse(self.pr_url)
             return f"{parsed_url.scheme}://{parsed_url.netloc}/scm/{self.workspace_slug.lower()}/{self.repo_slug.lower()}.git"
-        except Exception as e:
+        except Exception:
             get_logger().exception(f"url is not a valid merge requests url: {self.pr_url}")
             return ""
 
@@ -103,7 +103,7 @@ class BitbucketServerProvider(GitProvider):
 
     def get_repo_settings(self):
         try:
-            content = self.bitbucket_client.get_content_of_file(self.workspace_slug, self.repo_slug, ".pr_agent.toml")
+            content = self.bitbucket_client.get_content_of_file(self.workspace_slug, self.repo_slug, REPO_SETTINGS_FILENAME)
 
             return content
         except Exception as e:
@@ -216,7 +216,7 @@ class BitbucketServerProvider(GitProvider):
                                                                      self.repo_slug,
                                                                      path,
                                                                      commit_id)
-        except HTTPError as e:
+        except HTTPError:
             get_logger().debug(f"File {path} not found at commit id: {commit_id}")
         return file_content
 

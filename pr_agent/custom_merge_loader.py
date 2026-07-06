@@ -27,13 +27,13 @@ def load(obj, env=None, silent=True, key=None, filename=None):
         None
     """
 
-    # Get the list of files to load
-    # TODO: hasattr(obj, 'settings_files') for some reason returns False. Need to use 'settings_file'
-    settings_files = obj.settings_files if hasattr(obj, 'settings_files') else (
-        obj.settings_file) if hasattr(obj, 'settings_file') else []
+    # Get the list of files to load. Dynaconf accepts `settings_files` only as an
+    # init-time alias and stores the canonical value under the singular
+    # SETTINGS_FILE_FOR_DYNACONF, exposed as `obj.settings_file` (already a list).
+    settings_files = getattr(obj, 'settings_file', [])
     if not settings_files or not isinstance(settings_files, list):
-        get_logger().warning("No settings files specified, or missing keys "
-                             "(tried looking for 'settings_files' or 'settings_file'), or not a list. Skipping loading.",
+        get_logger().warning("No settings files specified ('settings_file' missing, empty, or not a list). "
+                             "Skipping loading.",
                              artifact={'toml_obj_attributes_names': dir(obj)})
         return
 

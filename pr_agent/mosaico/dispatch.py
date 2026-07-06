@@ -24,6 +24,7 @@ import aiohttp
 from pr_agent.config_loader import get_settings
 from pr_agent.log import get_logger
 from pr_agent.mosaico.diff_provider import parse_unified_diff
+from pr_agent.servers.metrics import count_degradation
 
 _VALID_VERBS = ("review", "improve", "describe", "ask")
 _DEFAULT_VERB = "review"
@@ -104,17 +105,27 @@ def _capture_artifact() -> str:
     return (data.get("artifact", "") or "").strip()
 
 
+# Every fallback below marks a degraded answer. Log + count each one (the
+# never-raise design otherwise makes real failures indistinguishable from
+# ordinary guidance text in aggregate).
+
+
 def _empty_fallback(verb: str) -> str:
+    get_logger().info(f"MOSAICO: degraded to empty-output fallback for {verb}")
+    count_degradation("mosaico_dispatch", "empty_output")
     return f"PR-Agent {verb}: no output produced (e.g. no files/changes detected)."
 
 
 def _error_fallback(verb: str) -> str:
+    get_logger().warning(f"MOSAICO: degraded to internal-error fallback for {verb}")
+    count_degradation("mosaico_dispatch", "internal_error")
     return f"PR-Agent could not complete the {verb} (internal error; see agent logs)."
 
 
 def _ask_needs_context_fallback() -> str:
     """Honest guidance for a context-free input (no PR URL, no diff). Every verb needs a
     PR/diff to act on, so we return guidance rather than invoking a tool that would fail."""
+    count_degradation("mosaico_dispatch", "needs_context")
     return "PR-Agent requires a PR URL or a supplied diff."
 
 
@@ -203,6 +214,8 @@ async def _fetch_public_diff(pr_url: str) -> Optional[str]:
 
 
 def _pr_fetch_failed_fallback(pr_url: str) -> str:
+    get_logger().warning(f"MOSAICO: degraded to fetch-failed fallback for {pr_url}")
+    count_degradation("mosaico_dispatch", "pr_fetch_failed")
     return (f"PR-Agent could not fetch a public diff for {pr_url} "
             f"(private repo, unsupported host such as Azure DevOps/Bitbucket, "
             f"or the host blocked the request). "

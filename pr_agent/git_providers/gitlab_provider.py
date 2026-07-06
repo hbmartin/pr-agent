@@ -17,7 +17,13 @@ from ..algo.language_handler import is_valid_file
 from ..algo.utils import PRReviewHeader, clip_tokens, find_line_number_of_relevant_line_in_file, load_large_diff
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import MAX_FILES_ALLOWED_FULL, GitProvider, IncrementalPR, get_cached_global_settings
+from .git_provider import (
+    MAX_FILES_ALLOWED_FULL,
+    REPO_SETTINGS_FILENAME,
+    GitProvider,
+    IncrementalPR,
+    get_cached_global_settings,
+)
 
 
 def _to_naive_utc(timestamp: str) -> datetime:
@@ -86,7 +92,7 @@ class GitLabProvider(GitProvider):
                 )
         except Exception as e:
             get_logger().error(f"Failed to create GitLab instance: {e}")
-            raise ValueError(f"Unable to authenticate with GitLab: {e}")
+            raise ValueError(f"Unable to authenticate with GitLab: {e}") from e
         self.max_comment_chars = 65000
         self.id_project = None
         self.id_mr = None
@@ -352,7 +358,7 @@ class GitLabProvider(GitProvider):
             repo_path = self._get_project_path_from_pr_or_issue_url(self.pr_url)
             try:
                 desired_branch = self.gl.projects.get(self.id_project).default_branch
-            except Exception as e:
+            except Exception:
                 get_logger().exception(f"Cannot get PR: {self.pr_url} default branch. Tried project ID: {self.id_project}")
                 return ("", "")
         else: #Use repo git url
@@ -448,7 +454,7 @@ class GitLabProvider(GitProvider):
                     'original_files': names_original,
                     'filtered_files': names_filtered
                 })
-            except Exception as e:
+            except Exception:
                 pass
 
         diff_files = []
@@ -685,7 +691,7 @@ class GitLabProvider(GitProvider):
             get_logger().debug(f"Creating comment in MR {self.id_mr} with body {body} and position {pos_obj}")
             try:
                 self.mr.discussions.create({'body': body, 'position': pos_obj})
-            except Exception as e:
+            except Exception:
                 try:
                     # fallback - create a general note on the file in the MR
                     if 'suggestion_orig_location' in original_suggestion:
@@ -708,10 +714,6 @@ class GitLabProvider(GitProvider):
                         label = original_suggestion['label']
                         score = original_suggestion.get('score', 7)
 
-                    if hasattr(self, 'main_language'):
-                        language = self.main_language
-                    else:
-                        language = ''
                     link = self.get_line_link(relevant_file, line_start, line_end)
                     body_fallback =f"**Suggestion:** {content} [{label}, importance: {score}]\n\n"
                     body_fallback +=f"\n\n<details><summary>[{target_file.filename} [{line_start}-{line_end}]]({link}):</summary>\n\n"
@@ -739,7 +741,7 @@ class GitLabProvider(GitProvider):
 
                     # get_logger().debug(
                     #     f"Failed to create comment in MR {self.id_mr} with position {pos_obj} (probably not a '+' line)")
-                except Exception as e:
+                except Exception:
                     get_logger().exception(f"Failed to create comment in MR {self.id_mr}")
 
     def get_relevant_diff(self, relevant_file: str, relevant_line_in_file: str) -> Optional[dict]:
@@ -889,13 +891,10 @@ class GitLabProvider(GitProvider):
         return self.mr.notes.list(get_all=True)[::-1]
 
     def get_repo_settings(self):
-        settings_files = []
-        global_settings = self._get_global_repo_settings()
-        if global_settings:
-            settings_files.append(("global", global_settings))
+        settings_files = self._settings_files_with_global()
         try:
             project = self.gl.projects.get(self.id_project)
-            contents = project.files.get(file_path='.pr_agent.toml', ref=project.default_branch).decode()
+            contents = project.files.get(file_path=REPO_SETTINGS_FILENAME, ref=project.default_branch).decode()
             if contents:
                 settings_files.append(("local", contents))
         except GitlabGetError as e:
@@ -926,7 +925,7 @@ class GitLabProvider(GitProvider):
     def _fetch_global_repo_settings(self, group):
         try:
             project = self.gl.projects.get(f"{group}/pr-agent-settings")
-            return project.files.get(file_path='.pr_agent.toml', ref=project.default_branch).decode()
+            return project.files.get(file_path=REPO_SETTINGS_FILENAME, ref=project.default_branch).decode()
         except GitlabGetError as e:
             if not _is_gitlab_not_found_error(e):
                 raise
@@ -1072,7 +1071,7 @@ class GitLabProvider(GitProvider):
         try:
             pr_id = self.mr.web_url
             return pr_id
-        except:
+        except Exception:
             return ""
 
     def get_line_link(self, relevant_file: str, relevant_line_start: int, relevant_line_end: int = None) -> str:

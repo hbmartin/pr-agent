@@ -186,7 +186,7 @@ The tool locates the last PR-Agent review comment, collects the commits (and the
 
 ### Extra instructions
 
-!!! tip "" 
+!!! tip ""
 
     Extra instructions are important.
     The `review` tool can be configured with extra instructions, which can be used to guide the model to a feedback tailored to the needs of your project.

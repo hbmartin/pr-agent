@@ -46,6 +46,29 @@ def _get_metrics():
     return _metrics
 
 
+_degradation_counter = None  # created lazily, once per process
+
+
+def count_degradation(component: str, kind: str) -> None:
+    """Count a request that degraded to a fallback answer after a swallowed error.
+
+    Components with never-raise designs (e.g. mosaico dispatch) call this at each
+    fallback site so degradation is visible in aggregate instead of only in logs.
+    No-op when metrics are disabled or prometheus-client is missing. Keep both
+    label values low-cardinality (fixed strings, no user input).
+    """
+    global _degradation_counter
+    if not metrics_enabled():
+        return
+    if _degradation_counter is None:
+        _degradation_counter = Counter(
+            "pr_agent_degradations_total",
+            "Requests answered with a fallback after a swallowed error",
+            ["component", "kind"],
+        )
+    _degradation_counter.labels(component=component, kind=kind).inc()
+
+
 def metrics_enabled() -> bool:
     if not get_settings().get("monitoring.enable_metrics", False):
         return False

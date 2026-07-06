@@ -2,14 +2,14 @@ _LANGCHAIN_INSTALLED = False
 
 try:
     from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.runnables import Runnable
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
     _LANGCHAIN_INSTALLED = True
-except:  # we don't enforce langchain as a dependency, so if it's not installed, just move on
+except Exception:  # we don't enforce langchain as a dependency, so if it's not installed, just move on
     pass
 
 
 import openai
-from langchain_core.runnables import Runnable
 from tenacity import retry, retry_if_exception_type, retry_if_not_exception_type, stop_after_attempt
 
 from pr_agent.algo.ai_handlers.base_ai_handler import BaseAiHandler, make_api_error
@@ -22,10 +22,10 @@ OPENAI_RETRIES = 5
 class LangChainOpenAIHandler(BaseAiHandler):
     def __init__(self):
         if not _LANGCHAIN_INSTALLED:
-            error_msg = "LangChain is not installed. Please install it with `pip install langchain`."
+            error_msg = "LangChain is not installed. Install it with `pip install \"pr-agent[langchain]\"`."
             get_logger().error(error_msg)
             raise ImportError(error_msg)
-        
+
         super().__init__()
         self.azure = get_settings().get("OPENAI.API_TYPE", "").lower() == "azure"
 
@@ -53,7 +53,7 @@ class LangChainOpenAIHandler(BaseAiHandler):
                     return ChatOpenAI(openai_api_key=get_settings().openai.key)
                 else:
                     return ChatOpenAI(
-                        openai_api_key=get_settings().openai.key, 
+                        openai_api_key=get_settings().openai.key,
                         openai_api_base=openai_api_base
                     )
         except AttributeError as e:
@@ -72,7 +72,7 @@ class LangChainOpenAIHandler(BaseAiHandler):
         try:
             messages = [SystemMessage(content=system), HumanMessage(content=user)]
             llm = await self._create_chat_async(deployment_id=self.deployment_id)
-            
+
             if not isinstance(llm, Runnable):
                 error_message = (
                     f"The Langchain LLM object ({type(llm)}) does not implement the Runnable interface. "

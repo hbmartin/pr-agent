@@ -1,8 +1,5 @@
-import copy
-import difflib
 import hashlib
 import itertools
-import json
 import os
 import re
 import time
@@ -17,7 +14,6 @@ from starlette_context import context
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential, wait_random
 
 from ..algo.file_filter import filter_ignored
-from ..algo.git_patch_processing import extract_hunk_headers
 from ..algo.language_handler import is_valid_file
 from ..algo.types import EDIT_TYPE
 from ..algo.utils import (
@@ -26,13 +22,20 @@ from ..algo.utils import (
     clip_tokens,
     find_line_number_of_relevant_line_in_file,
     load_large_diff,
-    set_file_languages,
 )
 from ..config_loader import get_settings
 from ..log import get_logger
 from ..servers.utils import RateLimitExceeded
-from .git_provider import (MAX_FILES_ALLOWED_FULL, FilePatchInfo, GitProvider,
-                           IncrementalPR, get_cached_global_settings)
+from .git_provider import (
+    MAX_FILES_ALLOWED_FULL,
+    REPO_SETTINGS_FILENAME,
+    FilePatchInfo,
+    GitProvider,
+    IncrementalPR,
+    get_cached_global_settings,
+)
+from .github_hunk_validation import validate_comments_inside_hunks
+from .github_sub_issues import fetch_sub_issues
 
 
 def _next_page_url(headers: dict) -> str:
@@ -90,7 +93,7 @@ class GithubProvider(GitProvider):
                 return None
             # else: Valid repo handle:
             return repo_obj.get_issue(issue_number)
-        except Exception as e:
+        except Exception:
             get_logger().exception(f"Failed to get an issue object for issue: {issue_url}, belonging to owner/repo: {repo_name}")
             return None
 
@@ -119,7 +122,7 @@ class GithubProvider(GitProvider):
                 get_logger().error(f"url is neither an issues url nor a PR url nor a valid git url: {given_url}. Returning empty result.")
                 return ""
             return repo_path
-        except Exception as e:
+        except Exception:
             get_logger().exception(f"unable to parse url: {given_url}. Returning empty result.")
             return ""
 
@@ -235,7 +238,7 @@ class GithubProvider(GitProvider):
         else:
             try:
                 return len(self.git_files)
-            except Exception as e:
+            except Exception:
                 return -1
 
     def get_diff_files(self) -> list[FilePatchInfo]:
@@ -535,27 +538,27 @@ class GithubProvider(GitProvider):
                 self._publish_inline_comments_fallback_with_verification(comments)
             except Exception as e:
                 get_logger().error(f"Failed to publish inline code comments fallback, error: {e}")
-                raise e    
-    
+                raise e
+
     def get_review_thread_comments(self, comment_id: int) -> list[dict]:
         """
         Retrieves all comments in the same thread as the given comment.
-        
+
         Args:
             comment_id: Review comment ID
-                
+
         Returns:
             List of comments in the same thread
         """
         try:
             # Fetch all comments with a single API call
             all_comments = list(self.pr.get_comments())
-            
+
             # Find the target comment by ID
             target_comment = next((c for c in all_comments if c.id == comment_id), None)
             if not target_comment:
                 return []
-        
+
             # Get root comment id
             root_comment_id = target_comment.raw_data.get("in_reply_to_id", target_comment.id)
             # Build the thread - include the root comment and all replies to it
@@ -563,10 +566,10 @@ class GithubProvider(GitProvider):
                 c for c in all_comments if
                 c.id == root_comment_id or c.raw_data.get("in_reply_to_id") == root_comment_id
             ]
-        
-        
+
+
             return thread_comments
-                
+
         except Exception as e:
             get_logger().exception("Failed to get review comments for an inline ask command", artifact={"comment_id": comment_id, "error": e})
             return []
@@ -594,7 +597,7 @@ class GithubProvider(GitProvider):
                 try:
                     self.publish_inline_comments([comment], disable_fallback=True)
                     get_logger().info(f"Published invalid comment as a single line comment: {comment}")
-                except:
+                except Exception:
                     get_logger().error(f"Failed to publish invalid comment as a single line comment: {comment}")
 
     def _verify_code_comment(self, comment: dict):
@@ -821,7 +824,7 @@ class GithubProvider(GitProvider):
         if not self.github_user_id:
             try:
                 self.github_user_id = self.github_client.get_user().raw_data['login']
-            except Exception as e:
+            except Exception:
                 self.github_user_id = ""
                 # logging.exception(f"Failed to get user id, error: {e}")
         return self.github_user_id
@@ -839,10 +842,7 @@ class GithubProvider(GitProvider):
         return self.pr.get_issue_comments()
 
     def get_repo_settings(self):
-        settings_files = []
-        global_settings = self._get_global_repo_settings()
-        if global_settings:
-            settings_files.append(("global", global_settings))
+        settings_files = self._settings_files_with_global()
 
         # Normalize each candidate before applying precedence so a whitespace-only
         # settings value doesn't short-circuit the PR_AGENT_CONFIG_BRANCH fallback.
@@ -855,7 +855,7 @@ class GithubProvider(GitProvider):
             # reason to fall back to the default branch. Unexpected errors are
             # left to propagate so they aren't masked by a silent fallback.
             try:
-                contents = self.repo_obj.get_contents(".pr_agent.toml", ref=config_branch).decoded_content
+                contents = self.repo_obj.get_contents(REPO_SETTINGS_FILENAME, ref=config_branch).decoded_content
                 if settings_files:
                     settings_files.append(("local", contents))
                     return settings_files
@@ -870,7 +870,7 @@ class GithubProvider(GitProvider):
                     f"No .pr_agent.toml on branch '{config_branch}', falling back to default branch")
         try:
             # more logical to take 'pr_agent.toml' from the default branch
-            contents = self.repo_obj.get_contents(".pr_agent.toml").decoded_content
+            contents = self.repo_obj.get_contents(REPO_SETTINGS_FILENAME).decoded_content
             if config_branch and not settings_files:
                 return contents
             settings_files.append(("local", contents))
@@ -1213,86 +1213,14 @@ class GithubProvider(GitProvider):
         try:
             pr_id = f"{self.repo}/{self.pr_num}"
             return pr_id
-        except:
+        except Exception:
             return ""
 
     def fetch_sub_issues(self, issue_url):
         """
         Fetch sub-issues linked to the given GitHub issue URL using GraphQL via PyGitHub.
         """
-        sub_issues = set()
-
-        # Extract owner, repo, and issue number from URL
-        parts = issue_url.rstrip("/").split("/")
-        owner, repo, issue_number = parts[-4], parts[-3], parts[-1]
-
-        try:
-            # Gets Issue ID from Issue Number
-            query = f"""
-            query {{
-                repository(owner: "{owner}", name: "{repo}") {{
-                    issue(number: {issue_number}) {{
-                        id
-                    }}
-                }}
-            }}
-            """
-            response_tuple = self.github_client._Github__requester.requestJson("POST", "/graphql",
-                                                                               input={"query": query})
-
-            # Extract the JSON response from the tuple and parses it
-            if isinstance(response_tuple, tuple) and len(response_tuple) == 3:
-                response_json = json.loads(response_tuple[2])
-            else:
-                get_logger().error(f"Unexpected response format: {response_tuple}")
-                return sub_issues
-
-
-            issue_id = response_json.get("data", {}).get("repository", {}).get("issue", {}).get("id")
-
-            if not issue_id:
-                get_logger().warning(f"Issue ID not found for {issue_url}")
-                return sub_issues
-
-            # Fetch Sub-Issues
-            sub_issues_query = f"""
-            query {{
-                node(id: "{issue_id}") {{
-                    ... on Issue {{
-                        subIssues(first: 10) {{
-                            nodes {{
-                                url
-                            }}
-                        }}
-                    }}
-                }}
-            }}
-            """
-            sub_issues_response_tuple = self.github_client._Github__requester.requestJson("POST", "/graphql", input={
-                "query": sub_issues_query})
-
-            # Extract the JSON response from the tuple and parses it
-            if isinstance(sub_issues_response_tuple, tuple) and len(sub_issues_response_tuple) == 3:
-                sub_issues_response_json = json.loads(sub_issues_response_tuple[2])
-            else:
-                get_logger().error("Unexpected sub-issues response format", artifact={"response": sub_issues_response_tuple})
-                return sub_issues
-
-            if not sub_issues_response_json.get("data", {}).get("node", {}).get("subIssues"):
-                get_logger().error("Invalid sub-issues response structure")
-                return sub_issues
-    
-            nodes = sub_issues_response_json.get("data", {}).get("node", {}).get("subIssues", {}).get("nodes", [])
-            get_logger().info(f"Github Sub-issues fetched: {len(nodes)}", artifact={"nodes": nodes})
-
-            for sub_issue in nodes:
-                if "url" in sub_issue:
-                    sub_issues.add(sub_issue["url"])
-
-        except Exception as e:
-            get_logger().exception(f"Failed to fetch sub-issues. Error: {e}")
-
-        return sub_issues
+        return fetch_sub_issues(self.github_client, issue_url)
 
     def auto_approve(self) -> bool:
         try:
@@ -1308,86 +1236,7 @@ class GithubProvider(GitProvider):
         """
         validate that all committable comments are inside PR hunks - this is a must for committable comments in GitHub
         """
-        code_suggestions_copy = copy.deepcopy(code_suggestions)
-        diff_files = self.get_diff_files()
-        RE_HUNK_HEADER = re.compile(
-            r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)")
-
-        diff_files = set_file_languages(diff_files)
-
-        for suggestion in code_suggestions_copy:
-            try:
-                relevant_file_path = suggestion['relevant_file']
-                for file in diff_files:
-                    if file.filename == relevant_file_path:
-
-                        # generate on-demand the patches range for the relevant file
-                        patch_str = file.patch
-                        if not hasattr(file, 'patches_range'):
-                            file.patches_range = []
-                            patch_lines = patch_str.splitlines()
-                            for i, line in enumerate(patch_lines):
-                                if line.startswith('@@'):
-                                    match = RE_HUNK_HEADER.match(line)
-                                    # identify hunk header
-                                    if match:
-                                        section_header, size1, size2, start1, start2 = extract_hunk_headers(match)
-                                        file.patches_range.append({'start': start2, 'end': start2 + size2 - 1})
-
-                        patches_range = file.patches_range
-                        comment_start_line = suggestion.get('relevant_lines_start', None)
-                        comment_end_line = suggestion.get('relevant_lines_end', None)
-                        original_suggestion = suggestion.get('original_suggestion', None) # needed for diff code
-                        if not comment_start_line or not comment_end_line or not original_suggestion:
-                            continue
-
-                        # check if the comment is inside a valid hunk
-                        is_valid_hunk = False
-                        min_distance = float('inf')
-                        patch_range_min = None
-                        # find the hunk that contains the comment, or the closest one
-                        for i, patch_range in enumerate(patches_range):
-                            d1 = comment_start_line - patch_range['start']
-                            d2 = patch_range['end'] - comment_end_line
-                            if d1 >= 0 and d2 >= 0:  # found a valid hunk
-                                is_valid_hunk = True
-                                min_distance = 0
-                                patch_range_min = patch_range
-                                break
-                            elif d1 * d2 <= 0:  # comment is possibly inside the hunk
-                                d1_clip = abs(min(0, d1))
-                                d2_clip = abs(min(0, d2))
-                                d = max(d1_clip, d2_clip)
-                                if d < min_distance:
-                                    patch_range_min = patch_range
-                                    min_distance = min(min_distance, d)
-                        if not is_valid_hunk:
-                            if min_distance < 10:  # 10 lines - a reasonable distance to consider the comment inside the hunk
-                                # make the suggestion non-committable, yet multi line
-                                suggestion['relevant_lines_start'] = max(suggestion['relevant_lines_start'], patch_range_min['start'])
-                                suggestion['relevant_lines_end'] = min(suggestion['relevant_lines_end'], patch_range_min['end'])
-                                body = suggestion['body'].strip()
-
-                                # present new diff code in collapsible
-                                existing_code = original_suggestion['existing_code'].rstrip() + "\n"
-                                improved_code = original_suggestion['improved_code'].rstrip() + "\n"
-                                diff = difflib.unified_diff(existing_code.split('\n'),
-                                                            improved_code.split('\n'), n=999)
-                                patch_orig = "\n".join(diff)
-                                patch = "\n".join(patch_orig.splitlines()[5:]).strip('\n')
-                                diff_code = f"\n\n<details><summary>New proposed code:</summary>\n\n```diff\n{patch.rstrip()}\n```"
-                                # replace ```suggestion ... ``` with diff_code, using regex:
-                                body = re.sub(r'```suggestion.*?```', diff_code, body, flags=re.DOTALL)
-                                body += "\n\n</details>"
-                                suggestion['body'] = body
-                                get_logger().info(f"Comment was moved to a valid hunk, "
-                                                  f"start_line={suggestion['relevant_lines_start']}, end_line={suggestion['relevant_lines_end']}, file={file.filename}")
-                            else:
-                                get_logger().error(f"Comment is not inside a valid hunk, "
-                                                   f"start_line={suggestion['relevant_lines_start']}, end_line={suggestion['relevant_lines_end']}, file={file.filename}")
-            except Exception as e:
-                get_logger().error(f"Failed to process patch for committable comment, error: {e}")
-        return code_suggestions_copy
+        return validate_comments_inside_hunks(self.get_diff_files(), code_suggestions)
 
     #Clone related
     def _prepare_clone_url_with_token(self, repo_url_to_clone: str) -> str | None:

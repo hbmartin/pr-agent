@@ -1,10 +1,10 @@
 comment: false
 coverage:
   status:
-    # Informational patch status: reports coverage on changed lines without
-    # blocking merges. Flip informational to false to enforce the target.
+    # Enforced patch status: changed lines must be at least 70% covered.
+    # Set informational to true to report without blocking merges.
     patch:
       default:
         target: 70%
-        informational: true
+        informational: false
     project: false

@@ -20,8 +20,8 @@ from pr_agent.algo.pr_processing import (
     get_pr_multi_diffs,
     retry_with_fallback_models,
 )
-from pr_agent.algo.skills_loader import get_skills_context
 from pr_agent.algo.repo_context import build_repo_context
+from pr_agent.algo.skills_loader import get_skills_context
 from pr_agent.algo.token_handler import TokenHandler
 from pr_agent.algo.utils import (
     ModelType,
@@ -40,6 +40,7 @@ from pr_agent.git_providers import (
 from pr_agent.git_providers.git_provider import GitProvider, get_main_pr_language
 from pr_agent.log import get_logger
 from pr_agent.servers.help import HelpMessage
+from pr_agent.tools.pr_comment_history import publish_persistent_comment_with_history
 from pr_agent.tools.pr_description import insert_br_after_x_chars
 from pr_agent.tools.progress_comment import build_progress_comment
 
@@ -264,114 +265,12 @@ class PRCodeSuggestions:
                                                 max_previous_comments=4,
                                                 progress_response=None,
                                                 only_fold=False):
-        if hasattr(git_provider, '_publish_check_run') and get_settings().github.publish_as_check_run:
-            if git_provider._publish_check_run(pr_comment, name):
-                return
-
-        def _extract_link(comment_text: str):
-            r = re.compile(r"<!--.*?-->")
-            match = r.search(comment_text)
-
-            up_to_commit_txt = ""
-            if match:
-                up_to_commit_txt = f" up to commit {match.group(0)[4:-3].strip()}"
-            return up_to_commit_txt
-
-        history_header = "#### Previous suggestions\n"
-        last_commit_num = git_provider.get_latest_commit_url().split('/')[-1][:7]
-        if only_fold: # A user clicked on the 'self-review' checkbox
-            text = get_settings().pr_code_suggestions.code_suggestions_self_review_text
-            latest_suggestion_header = f"\n\n- [x]  {text}"
-        else:
-            latest_suggestion_header = f"Latest suggestions up to {last_commit_num}"
-        latest_commit_html_comment = f"<!-- {last_commit_num} -->"
-        found_comment = None
-
-        if max_previous_comments > 0:
-            try:
-                prev_comments = list(git_provider.get_issue_comments())
-                for comment in prev_comments:
-                    if comment.body.startswith(initial_header):
-                        prev_suggestions = comment.body
-                        found_comment = comment
-                        comment_url = git_provider.get_comment_url(comment)
-
-                        if history_header.strip() not in comment.body:
-                            # no history section
-                            # extract everything between <table> and </table> in comment.body including <table> and </table>
-                            table_index = comment.body.find("<table>")
-                            if table_index == -1:
-                                git_provider.edit_comment(comment, pr_comment)
-                                continue
-                            # find http link from comment.body[:table_index]
-                            up_to_commit_txt = _extract_link(comment.body[:table_index])
-                            prev_suggestion_table = comment.body[
-                                                    table_index:comment.body.rfind("</table>") + len("</table>")]
-
-                            tick = "✅ " if "✅" in prev_suggestion_table else ""
-                            # surround with details tag
-                            prev_suggestion_table = f"<details><summary>{tick}{name.capitalize()}{up_to_commit_txt}</summary>\n<br>{prev_suggestion_table}\n\n</details>"
-
-                            new_suggestion_table = pr_comment.replace(initial_header, "").strip()
-
-                            pr_comment_updated = f"{initial_header}\n{latest_commit_html_comment}\n\n"
-                            pr_comment_updated += f"{latest_suggestion_header}\n{new_suggestion_table}\n\n___\n\n"
-                            pr_comment_updated += f"{history_header}{prev_suggestion_table}\n"
-                        else:
-                            # get the text of the previous suggestions until the latest commit
-                            sections = prev_suggestions.split(history_header.strip())
-                            latest_table = sections[0].strip()
-                            prev_suggestion_table = sections[1].replace(history_header, "").strip()
-
-                            # get text after the latest_suggestion_header in comment.body
-                            table_ind = latest_table.find("<table>")
-                            up_to_commit_txt = _extract_link(latest_table[:table_ind])
-
-                            latest_table = latest_table[table_ind:latest_table.rfind("</table>") + len("</table>")]
-                            # enforce max_previous_comments
-                            count = prev_suggestions.count(f"\n<details><summary>{name.capitalize()}")
-                            count += prev_suggestions.count(f"\n<details><summary>✅ {name.capitalize()}")
-                            if count >= max_previous_comments:
-                                # remove the oldest suggestion
-                                prev_suggestion_table = prev_suggestion_table[:prev_suggestion_table.rfind(
-                                    f"<details><summary>{name.capitalize()} up to commit")]
-
-                            tick = "✅ " if "✅" in latest_table else ""
-                            # Add to the prev_suggestions section
-                            last_prev_table = f"\n<details><summary>{tick}{name.capitalize()}{up_to_commit_txt}</summary>\n<br>{latest_table}\n\n</details>"
-                            prev_suggestion_table = last_prev_table + "\n" + prev_suggestion_table
-
-                            new_suggestion_table = pr_comment.replace(initial_header, "").strip()
-
-                            pr_comment_updated = f"{initial_header}\n"
-                            pr_comment_updated += f"{latest_commit_html_comment}\n\n"
-                            pr_comment_updated += f"{latest_suggestion_header}\n\n{new_suggestion_table}\n\n"
-                            pr_comment_updated += "___\n\n"
-                            pr_comment_updated += f"{history_header}\n"
-                            pr_comment_updated += f"{prev_suggestion_table}\n"
-
-                        get_logger().info(f"Persistent mode - updating comment {comment_url} to latest {name} message")
-                        if progress_response:  # publish to 'progress_response' comment, because it refreshes immediately
-                            git_provider.edit_comment(progress_response, pr_comment_updated)
-                            git_provider.remove_comment(comment)
-                            comment = progress_response
-                        else:
-                            git_provider.edit_comment(comment, pr_comment_updated)
-                        return comment
-            except Exception as e:
-                get_logger().exception(f"Failed to update persistent review, error: {e}")
-                pass
-
-        # if we are here, we did not find a previous comment to update
-        body = pr_comment.replace(initial_header, "").strip()
-        pr_comment = f"{initial_header}\n\n{latest_commit_html_comment}\n\n{body}\n\n"
-        if progress_response:
-            git_provider.edit_comment(progress_response, pr_comment)
-            new_comment = progress_response
-        else:
-            new_comment = git_provider.publish_comment(pr_comment)
-        return new_comment
-
+        return publish_persistent_comment_with_history(
+            git_provider, pr_comment, initial_header,
+            update_header=update_header, name=name,
+            final_update_message=final_update_message,
+            max_previous_comments=max_previous_comments,
+            progress_response=progress_response, only_fold=only_fold)
 
     def extract_link(self, s):
         r = re.compile(r"<!--.*?-->")
@@ -431,7 +330,7 @@ class PRCodeSuggestions:
             await self.analyze_self_reflection_response(data, response_reflect)
         else:
             # get_logger().error(f"Could not self-reflect on suggestions. using default score 7")
-            for i, suggestion in enumerate(data["code_suggestions"]):
+            for _i, suggestion in enumerate(data["code_suggestions"]):
                 suggestion["score"] = 7
                 suggestion["score_why"] = ""
 
@@ -470,7 +369,7 @@ class PRCodeSuggestions:
                         get_logger().error(f"Failed to log suggestion statistics, error: {e}")
                         pass
 
-                except Exception as e:  #
+                except Exception:  #
                     get_logger().error(f"Error processing suggestion score {i}",
                                        artifact={"suggestion": suggestion,
                                                  "code_suggestions_feedback": code_suggestions_feedback[i]})
@@ -723,11 +622,11 @@ class PRCodeSuggestions:
                 prediction_list = await asyncio.gather(
                     *[self._get_prediction(model, patches_diff, patches_diff_no_line_numbers) for
                       patches_diff, patches_diff_no_line_numbers in
-                      zip(self.patches_diff_list, self.patches_diff_list_no_line_numbers)])
+                      zip(self.patches_diff_list, self.patches_diff_list_no_line_numbers, strict=False)])
                 self.prediction_list = prediction_list
             else:
                 prediction_list = []
-                for patches_diff, patches_diff_no_line_numbers in zip(self.patches_diff_list, self.patches_diff_list_no_line_numbers):
+                for patches_diff, patches_diff_no_line_numbers in zip(self.patches_diff_list, self.patches_diff_list_no_line_numbers, strict=False):
                     prediction = await self._get_prediction(model, patches_diff, patches_diff_no_line_numbers)
                     prediction_list.append(prediction)
 
@@ -784,7 +683,7 @@ class PRCodeSuggestions:
                         patch_final = clip_tokens(patch_final, max_tokens_full - delta_output)
                     patches_diff_list.append(patch_final)
                 return patches_diff_list
-            except Exception as e:
+            except Exception:
                 get_logger().exception("Error converting to decoupled with line numbers",
                                        artifact={'patches_diff_list_no_line_numbers': patches_diff_list_no_line_numbers})
                 return []
@@ -845,7 +744,7 @@ class PRCodeSuggestions:
                     try:
                         code_snippet_link = self.git_provider.get_line_link(relevant_file, relevant_lines_start,
                                                                             relevant_lines_end)
-                    except:
+                    except Exception:
                         code_snippet_link = ""
                     # add html table for each suggestion
 

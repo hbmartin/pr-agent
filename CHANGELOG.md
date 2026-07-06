@@ -1,3 +1,8 @@
+> **Historical document.** This file stopped being maintained in August 2023 and is kept
+> only for archaeology. For current changes see the
+> [GitHub releases page](https://github.com/hbmartin/pr-agent/releases) and the
+> git history; the version in `pyproject.toml` is the source of truth.
+
 ## 2023-08-03
 
 ### Optimized
