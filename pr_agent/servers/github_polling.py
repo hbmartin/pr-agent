@@ -1,5 +1,6 @@
 import asyncio
 import multiprocessing
+import re
 import traceback
 from collections import deque
 from datetime import datetime, timezone
@@ -34,6 +35,16 @@ def now() -> str:
     now_utc = datetime.now(timezone.utc).isoformat()
     now_utc = now_utc.replace("+00:00", "Z")
     return now_utc
+
+
+def user_tag_regex(user_tag: str) -> str:
+    # Match the tag only as a whole mention, not embedded in a longer
+    # username (e.g. "@alice" inside "@alicezhang" or "bob@alice").
+    return rf"(?<![\w-]){re.escape(user_tag)}(?![\w-])"
+
+
+def contains_user_tag(comment_body: str, user_tag: str) -> bool:
+    return bool(re.search(user_tag_regex(user_tag), comment_body))
 
 async def async_handle_request(pr_url, rest_of_comment, comment_id, git_provider):
     agent = PRAgent()
@@ -100,7 +111,7 @@ async def is_valid_notification(notification, headers, handled_ids, session, use
                             get_logger().debug("no comment_body")
                             check_prev_comments = True
                         else:
-                            if user_tag not in comment_body:
+                            if not contains_user_tag(comment_body, user_tag):
                                 get_logger().debug("user_tag not in comment_body")
                                 check_prev_comments = True
                             else:
@@ -123,7 +134,7 @@ async def is_valid_notification(notification, headers, handled_ids, session, use
                                 comment_body = comment.get('body', '')
                                 if not comment_body:
                                     continue
-                                if user_tag in comment_body:
+                                if contains_user_tag(comment_body, user_tag):
                                     get_logger().info("found user tag in previous comments")
                                     get_logger().info(f"Polling, pr_url: {pr_url}",
                                                       artifact={"comment": comment_body})
@@ -148,8 +159,6 @@ async def polling_loop():
     handled_ids = set()
     since = [now()]
     last_modified = [None]
-    git_provider = get_git_provider()()
-    user_id = git_provider.get_user_id()
     get_settings().set("CONFIG.PUBLISH_OUTPUT_PROGRESS", False)
     get_settings().set("pr_description.publish_description_as_comment", True)
 
@@ -164,6 +173,11 @@ async def polling_loop():
         raise ValueError("Deployment mode must be set to 'user' to get notifications")
     if not token:
         raise ValueError("User token must be set to get notifications")
+
+    git_provider = get_git_provider()()
+    user_id = git_provider.get_user_id()
+    if not user_id:
+        raise ValueError("Failed to fetch the authenticated user id; cannot listen for mentions")
 
     async with aiohttp.ClientSession() as session:
         while True:
@@ -201,7 +215,11 @@ async def polling_loop():
                             output = await is_valid_notification(notification, headers, handled_ids, session, user_id)
                             if output[0]:
                                 _, handled_ids, comment, comment_body, pr_url, user_tag = output
-                                rest_of_comment = comment_body.split(user_tag)[1].strip()
+                                rest_of_comment = re.split(user_tag_regex(user_tag), comment_body,
+                                                           maxsplit=1)[1].strip()
+                                if not rest_of_comment:
+                                    get_logger().info(f"Skipping comment with no command after user tag, {pr_url}")
+                                    continue
                                 comment_id = comment['id']
 
                                 # Add to the task queue
