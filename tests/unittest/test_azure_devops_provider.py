@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from pr_agent.git_providers.azuredevops_provider import AzureDevopsProvider
 
 
@@ -39,7 +41,7 @@ class TestAzureDevopsProviderRepoContext:
         _, kwargs = provider.azure_devops_client.get_item.call_args
         assert kwargs["version_descriptor"] is None  # no version -> default branch
 
-    def test_get_repo_file_content_treats_failure_as_empty(self):
+    def test_get_repo_file_content_treats_missing_file_as_empty(self):
         provider = AzureDevopsProvider.__new__(AzureDevopsProvider)
         provider.repo_slug = "my-repo"
         provider.workspace_slug = "my-project"
@@ -49,3 +51,15 @@ class TestAzureDevopsProviderRepoContext:
         provider.azure_devops_client.get_item.side_effect = Exception("not found")
 
         assert provider.get_repo_file_content("MISSING.md") == ""
+
+    def test_get_repo_file_content_propagates_transient_failure(self):
+        provider = AzureDevopsProvider.__new__(AzureDevopsProvider)
+        provider.repo_slug = "my-repo"
+        provider.workspace_slug = "my-project"
+        provider.pr = MagicMock()
+        provider.pr.last_merge_target_commit.commit_id = "base-sha"
+        provider.azure_devops_client = MagicMock()
+        provider.azure_devops_client.get_item.side_effect = RuntimeError("service unavailable")
+
+        with pytest.raises(RuntimeError):
+            provider.get_repo_file_content("AGENTS.md")

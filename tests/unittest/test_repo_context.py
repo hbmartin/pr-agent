@@ -287,6 +287,26 @@ def test_build_repo_context_process_cache_invalidates_when_config_changes(repo_c
     assert second_provider.requested_paths == ["CONTRIBUTING.md"]
 
 
+def test_build_repo_context_cache_invalidates_when_default_branch_source_changes(repo_context_settings):
+    repo_context_settings.set("CONFIG.REPO_CONTEXT_FILES", ["AGENTS.md"])
+    repo_context_settings.set("CONFIG.REPO_CONTEXT_MAX_LINES", 500)
+    repo_context_settings.set("CONFIG.REPO_CONTEXT_FROM_DEFAULT_BRANCH", True)
+    provider = FakeProvider({}, pr_url="https://example.com/org/repo/pull/1")
+    provider.get_repo_file_content = Mock(
+        side_effect=lambda file_path, from_default_branch=False: (
+            "default branch context" if from_default_branch else "target branch context"
+        )
+    )
+
+    first_context = build_repo_context(provider)
+    repo_context_settings.set("CONFIG.REPO_CONTEXT_FROM_DEFAULT_BRANCH", False)
+    second_context = build_repo_context(provider)
+
+    assert "default branch context" in first_context
+    assert "target branch context" in second_context
+    assert provider.get_repo_file_content.call_count == 2
+
+
 def test_build_repo_context_does_not_cache_empty_context_after_fetch_error(repo_context_settings):
     repo_context_settings.set("CONFIG.REPO_CONTEXT_FILES", ["AGENTS.md"])
     repo_context_settings.set("CONFIG.REPO_CONTEXT_MAX_LINES", 500)

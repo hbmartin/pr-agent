@@ -69,3 +69,14 @@ def test_claude_extended_thinking_override_entries_are_stripped(monkeypatch, log
 
     assert handler.claude_extended_thinking_models == ["custom-claude-model", "another-model"]
     logger.warning.assert_not_called()
+
+
+def test_claude_extended_thinking_includes_bedrock_apac_variants():
+    expected_models = {
+        "bedrock/apac.anthropic.claude-sonnet-4-6",
+        "bedrock/apac.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "bedrock/apac.anthropic.claude-opus-4-5-20251101-v1:0",
+        "bedrock/apac.anthropic.claude-opus-4-6-v1:0",
+    }
+
+    assert expected_models.issubset(CLAUDE_EXTENDED_THINKING_MODELS)

@@ -6,7 +6,7 @@ from requests.exceptions import HTTPError
 
 from pr_agent.algo.types import EDIT_TYPE, FilePatchInfo
 from pr_agent.git_providers import BitbucketServerProvider
-from pr_agent.git_providers.bitbucket_provider import BitbucketProvider
+from pr_agent.git_providers.bitbucket_provider import BITBUCKET_REQUEST_TIMEOUT_SECONDS, BitbucketProvider
 
 
 class TestBitbucketProvider:
@@ -81,6 +81,20 @@ class TestBitbucketServerProvider:
 
         assert content == "repo context"
         provider.get_file.assert_called_once_with("AGENTS.md", "main")
+
+    def test_get_repo_file_content_from_default_branch_returns_empty_when_unresolved(self):
+        provider = BitbucketServerProvider.__new__(BitbucketServerProvider)
+        provider.workspace_slug = "AAA"
+        provider.repo_slug = "my-repo"
+        provider.pr = MagicMock(toRef={"latestCommit": "base-sha"})
+        provider.bitbucket_client = MagicMock()
+        provider.bitbucket_client.get_default_branch.return_value = {}
+        provider.get_file = MagicMock(return_value="repo context")
+
+        content = provider.get_repo_file_content("AGENTS.md", from_default_branch=True)
+
+        assert content == ""
+        provider.get_file.assert_not_called()
 
     def _make_provider_for_repo_settings(self, get_content_side_effect):
         # Bypass __init__ (which performs live API calls) and only wire up the
@@ -411,10 +425,10 @@ def _clear_global_settings_cache():
 
 
 class TestBitbucketGlobalSettings:
-    def _provider(self):
+    def _provider(self, authorization="Bearer x"):
         provider = BitbucketProvider.__new__(BitbucketProvider)
         provider.workspace_slug = "myws"
-        provider.headers = {"Authorization": "Bearer x"}
+        provider.headers = {"Authorization": authorization}
         return provider
 
     def test_loads_workspace_pr_agent_settings(self):
@@ -432,6 +446,7 @@ class TestBitbucketGlobalSettings:
         assert rq.call_count == 2  # repo info + file
         assert "myws/pr-agent-settings" in rq.call_args_list[0].args[1]
         assert "src/main/.pr_agent.toml" in rq.call_args_list[1].args[1]
+        assert all(call.kwargs["timeout"] == BITBUCKET_REQUEST_TIMEOUT_SECONDS for call in rq.call_args_list)
 
     def test_no_access_403_returns_empty_and_caches(self):
         # A 403 (no access) is a stable/expected condition like 404: return "" AND cache it.
@@ -476,6 +491,23 @@ class TestBitbucketGlobalSettings:
         # Two HTTP calls total (first fetch), none on the cached second call.
         assert rq.call_count == 2
 
+    def test_cache_key_includes_authorization_identity(self):
+        first_provider = self._provider("Bearer low-permission")
+        second_provider = self._provider("Bearer high-permission")
+        repo_resp_forbidden = MagicMock(status_code=403)
+        repo_resp_ok = MagicMock(status_code=200)
+        repo_resp_ok.json.return_value = {"mainbranch": {"name": "main"}}
+        file_resp = MagicMock(status_code=200)
+        file_resp.text = "[pr_reviewer]\nx = 1\n"
+        with patch(
+            "pr_agent.git_providers.bitbucket_provider.requests.request",
+            side_effect=[repo_resp_forbidden, repo_resp_ok, file_resp],
+        ) as rq, patch("pr_agent.git_providers.bitbucket_provider.get_settings") as ms:
+            ms.return_value.config.use_global_settings_file = True
+            assert first_provider._get_global_repo_settings() == ""
+            assert second_provider._get_global_repo_settings() == b"[pr_reviewer]\nx = 1\n"
+        assert rq.call_count == 3
+
 
 class TestBitbucketLocalSettingsRobustness:
     def test_get_repo_settings_ignores_error_response_for_local(self):
@@ -487,8 +519,9 @@ class TestBitbucketLocalSettingsRobustness:
         provider.pr = MagicMock(destination_branch="main")
         resp = MagicMock(status_code=500)
         resp.text = "<html>internal error</html>"
-        with patch("pr_agent.git_providers.bitbucket_provider.requests.request", return_value=resp), \
+        with patch("pr_agent.git_providers.bitbucket_provider.requests.request", return_value=resp) as rq, \
              patch("pr_agent.git_providers.bitbucket_provider.get_settings") as ms:
             ms.return_value.config.use_global_settings_file = False
             result = provider.get_repo_settings()
         assert result == ""
+        assert rq.call_args.kwargs["timeout"] == BITBUCKET_REQUEST_TIMEOUT_SECONDS

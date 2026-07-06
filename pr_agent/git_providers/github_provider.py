@@ -216,7 +216,7 @@ class GithubProvider(GitProvider):
 
     def get_files(self):
         if self.incremental.is_incremental and self.unreviewed_files_map:
-            return self.unreviewed_files_map.values()
+            return list(self.unreviewed_files_map.values())
         try:
             git_files = context.get("git_files", None)
             if git_files:

@@ -29,6 +29,11 @@ def _to_naive_utc(timestamp: str) -> datetime:
     return parsed
 
 
+def _is_gitlab_not_found_error(error: GitlabGetError) -> bool:
+    response_code = getattr(error, "response_code", None)
+    return response_code == 404 or str(error).strip().startswith("404")
+
+
 class _IncrementalCommit:
     """Adapts a GitLab commit to the (GitHub-commit-shaped) attributes read by
     IncrementalPR and the review tool's thresholds: .sha and .commit.author.date."""
@@ -889,12 +894,15 @@ class GitLabProvider(GitProvider):
         if global_settings:
             settings_files.append(("global", global_settings))
         try:
-            main_branch = self.gl.projects.get(self.id_project).default_branch
-            contents = self.gl.projects.get(self.id_project).files.get(file_path='.pr_agent.toml', ref=main_branch).decode()
+            project = self.gl.projects.get(self.id_project)
+            contents = project.files.get(file_path='.pr_agent.toml', ref=project.default_branch).decode()
             if contents:
                 settings_files.append(("local", contents))
-        except GitlabGetError:
-            pass  # a missing local .pr_agent.toml is expected
+        except GitlabGetError as e:
+            if _is_gitlab_not_found_error(e):
+                pass  # a missing local .pr_agent.toml is expected
+            else:
+                get_logger().warning(f"Failed to load local .pr_agent.toml file, error: {e}")
         except Exception as e:
             get_logger().warning(f"Failed to load local .pr_agent.toml file, error: {e}")
         return settings_files if settings_files else ""
@@ -919,7 +927,9 @@ class GitLabProvider(GitProvider):
         try:
             project = self.gl.projects.get(f"{group}/pr-agent-settings")
             return project.files.get(file_path='.pr_agent.toml', ref=project.default_branch).decode()
-        except GitlabGetError:
+        except GitlabGetError as e:
+            if not _is_gitlab_not_found_error(e):
+                raise
             # A missing pr-agent-settings project/file is an expected fallback -> return "" (cached).
             return ""
         # Transient/unexpected errors propagate so the caller does not cache the failure.
@@ -936,8 +946,10 @@ class GitLabProvider(GitProvider):
                 ref = getattr(self.mr, "target_branch", None) or project.default_branch
             contents = project.files.get(file_path=file_path, ref=ref).decode()
             return decode_if_bytes(contents)
-        except GitlabGetError:
-            return ""
+        except GitlabGetError as e:
+            if _is_gitlab_not_found_error(e):
+                return ""
+            raise
 
     def get_workspace_name(self):
         return self.id_project.split('/')[0]

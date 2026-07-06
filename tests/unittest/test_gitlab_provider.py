@@ -119,6 +119,27 @@ class TestGitLabProvider:
 
         assert content == ""
 
+    def test_get_repo_file_content_propagates_transient_gitlab_error(self, gitlab_provider, mock_project):
+        mock_project.default_branch = "main"
+        gitlab_provider.mr = MagicMock(target_branch="main")
+        mock_project.files.get.side_effect = GitlabGetError("500 Internal Server Error")
+
+        with pytest.raises(GitlabGetError):
+            gitlab_provider.get_repo_file_content("AGENTS.md")
+
+    def test_get_repo_settings_reuses_project_lookup(self, gitlab_provider, mock_gitlab_client, mock_project):
+        mock_project.default_branch = "main"
+        mock_project.files.get.return_value.decode.return_value = b"[pr_reviewer]\nnum_max_findings = 5\n"
+        mock_gitlab_client.projects.get.reset_mock()
+
+        with patch("pr_agent.git_providers.gitlab_provider.get_settings") as mock_settings:
+            mock_settings.return_value.config.use_global_settings_file = False
+            result = gitlab_provider.get_repo_settings()
+
+        assert result == [("local", b"[pr_reviewer]\nnum_max_findings = 5\n")]
+        mock_gitlab_client.projects.get.assert_called_once_with("test/repo")
+        mock_project.files.get.assert_called_once_with(file_path=".pr_agent.toml", ref="main")
+
     def test_create_or_update_pr_file_create_new(self, gitlab_provider, mock_project):
         mock_project.files.get.side_effect = GitlabGetError("404 Not Found")
         mock_file = MagicMock()

@@ -2,6 +2,7 @@
 import os
 import shutil
 import subprocess
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
@@ -19,6 +20,7 @@ _GLOBAL_SETTINGS_CACHE_MAX_SIZE = 256
 # Only cache reasonably-sized settings blobs; a valid .pr_agent.toml is tiny. This bounds the
 # process-wide cache memory (256 entries x this) regardless of the much larger apply-time size cap.
 _GLOBAL_SETTINGS_CACHE_MAX_VALUE_BYTES = 1024 * 1024
+_GLOBAL_SETTINGS_CACHE_LOCK = threading.RLock()
 
 
 def get_cached_global_settings(cache_key, fetch_fn):
@@ -41,18 +43,22 @@ def get_cached_global_settings(cache_key, fetch_fn):
     if not cache_key:
         return _fetch_safely()[0]
     now = time.monotonic()
-    entry = _GLOBAL_SETTINGS_CACHE.get(cache_key)
-    if entry is not None and entry[1] > now:
-        return entry[0]
+    with _GLOBAL_SETTINGS_CACHE_LOCK:
+        entry = _GLOBAL_SETTINGS_CACHE.get(cache_key)
+        if entry is not None:
+            if entry[1] > now:
+                return entry[0]
+            _GLOBAL_SETTINGS_CACHE.pop(cache_key, None)
     value, cacheable = _fetch_safely()
     if not cacheable:
         return value
     value_size = len(value) if isinstance(value, (bytes, str)) else 0
     if value_size <= _GLOBAL_SETTINGS_CACHE_MAX_VALUE_BYTES:
-        _GLOBAL_SETTINGS_CACHE[cache_key] = (value, now + _GLOBAL_SETTINGS_CACHE_TTL_SECONDS)
-        while len(_GLOBAL_SETTINGS_CACHE) > _GLOBAL_SETTINGS_CACHE_MAX_SIZE:
-            oldest_key = min(_GLOBAL_SETTINGS_CACHE, key=lambda k: _GLOBAL_SETTINGS_CACHE[k][1])
-            _GLOBAL_SETTINGS_CACHE.pop(oldest_key, None)
+        with _GLOBAL_SETTINGS_CACHE_LOCK:
+            _GLOBAL_SETTINGS_CACHE[cache_key] = (value, now + _GLOBAL_SETTINGS_CACHE_TTL_SECONDS)
+            while len(_GLOBAL_SETTINGS_CACHE) > _GLOBAL_SETTINGS_CACHE_MAX_SIZE:
+                oldest_key = min(_GLOBAL_SETTINGS_CACHE, key=lambda k: _GLOBAL_SETTINGS_CACHE[k][1])
+                _GLOBAL_SETTINGS_CACHE.pop(oldest_key, None)
     return value
 
 

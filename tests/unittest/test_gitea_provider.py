@@ -98,8 +98,14 @@ class TestGiteaProvider:
         assert kwargs.get('query_params') == [('ref', 'sha1')]
         assert kwargs.get('auth_settings') == ['AuthorizationHeaderToken']
 
+        mock_api_client.reset_mock()
+        mock_api_client.call_api.side_effect = ApiException(status=500)
+        with pytest.raises(ApiException):
+            repo_api.get_file_content('owner', 'repo', 'sha1', 'file.txt', raise_on_error=True)
+
         # 5. get_pr_commits
         mock_api_client.reset_mock()
+        mock_api_client.call_api.side_effect = None
         mock_resp.data = BytesIO(b'[]')
         mock_api_client.call_api.return_value = mock_resp
 
@@ -269,7 +275,8 @@ class TestGiteaProvider:
             owner="owner",
             repo="repo",
             commit_sha="base-sha",
-            filepath="AGENTS.md"
+            filepath="AGENTS.md",
+            raise_on_error=True,
         )
 
     def test_get_repo_file_content_loads_from_base_ref_when_base_sha_missing(self):
@@ -290,7 +297,8 @@ class TestGiteaProvider:
             owner="owner",
             repo="repo",
             commit_sha="main",
-            filepath="AGENTS.md"
+            filepath="AGENTS.md",
+            raise_on_error=True,
         )
 
     def test_get_repo_file_content_from_default_branch(self):
@@ -312,7 +320,8 @@ class TestGiteaProvider:
             owner="owner",
             repo="repo",
             commit_sha="main",
-            filepath="AGENTS.md"
+            filepath="AGENTS.md",
+            raise_on_error=True,
         )
 
     def test_get_repo_file_content_treats_404_as_missing(self):

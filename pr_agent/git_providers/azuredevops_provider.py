@@ -51,6 +51,15 @@ def _to_naive_utc(dt):
     return dt
 
 
+def _is_azure_not_found_error(error) -> bool:
+    status_code = getattr(error, "status_code", None)
+    response = getattr(error, "response", None)
+    if status_code is None and response is not None:
+        status_code = getattr(response, "status_code", None)
+    message = str(error).lower()
+    return status_code == 404 or "404" in message or "not found" in message
+
+
 class _AzureCommitInner:
     def __init__(self, raw):
         self.message = getattr(raw, "comment", "") or ""
@@ -381,9 +390,11 @@ class AzureDevopsProvider(GitProvider):
             )
             return item.content or ""
         except Exception as e:
+            if _is_azure_not_found_error(e):
+                return ""
             if get_settings().config.verbosity_level >= 2:
                 get_logger().warning(f"Failed to load repo file: {file_path}, error: {e}")
-            return ""
+            raise
 
     def get_files(self):
         if (isinstance(getattr(self, "incremental", None), IncrementalPR)

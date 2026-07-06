@@ -122,7 +122,10 @@ class BitbucketServerProvider(GitProvider):
         # or from the repository default branch when from_default_branch is requested.
         if from_default_branch:
             default_branch_dict = self.bitbucket_client.get_default_branch(self.workspace_slug, self.repo_slug)
-            ref = default_branch_dict.get('displayId') or self.pr.toRef['latestCommit']
+            ref = default_branch_dict.get('displayId')
+            if not ref:
+                get_logger().warning("Cannot get repo file content: default branch could not be resolved")
+                return ""
         else:
             ref = self.pr.toRef['latestCommit']
         return self.get_file(file_path, ref)

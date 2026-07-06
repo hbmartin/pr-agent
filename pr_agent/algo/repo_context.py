@@ -59,8 +59,15 @@ def _get_markdown_fence(content: str) -> str:
     return fence
 
 
-def _get_repo_context_cache_key(context_files: list, max_lines: int) -> tuple[tuple[tuple[str, str], ...], int]:
-    return tuple((type(file_path).__name__, str(file_path)) for file_path in context_files), max_lines
+def _get_repo_context_cache_key(
+    context_files: list,
+    max_lines: int,
+    from_default_branch: bool | None = None,
+) -> tuple[tuple[tuple[str, str], ...], int, bool]:
+    if from_default_branch is None:
+        from_default_branch = _read_bool_setting("repo_context_from_default_branch", default=True)
+    file_keys = tuple((type(file_path).__name__, str(file_path)) for file_path in context_files)
+    return file_keys, max_lines, from_default_branch
 
 
 def _get_repo_context_process_cache_key(git_provider, context_files: list, max_lines: int) -> tuple | None:

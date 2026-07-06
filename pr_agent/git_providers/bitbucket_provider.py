@@ -1,4 +1,5 @@
 import difflib
+import hashlib
 import json
 import re
 from typing import Optional, Tuple
@@ -16,6 +17,8 @@ from ..algo.utils import find_line_number_of_relevant_line_in_file
 from ..config_loader import get_settings
 from ..log import get_logger
 from .git_provider import MAX_FILES_ALLOWED_FULL, GitProvider, get_cached_global_settings
+
+BITBUCKET_REQUEST_TIMEOUT_SECONDS = 30
 
 
 def _gef_filename(diff):
@@ -85,7 +88,12 @@ class BitbucketProvider(GitProvider):
         try:
             url = (f"https://api.bitbucket.org/2.0/repositories/{self.workspace_slug}/{self.repo_slug}/src/"
                    f"{self.pr.destination_branch}/.pr_agent.toml")
-            response = requests.request("GET", url, headers=self.headers)
+            response = requests.request(
+                "GET",
+                url,
+                headers=self.headers,
+                timeout=BITBUCKET_REQUEST_TIMEOUT_SECONDS,
+            )
             if response.status_code == 200:  # found
                 settings_files.append(("local", response.text.encode('utf-8')))
             elif response.status_code != 404:
@@ -103,13 +111,25 @@ class BitbucketProvider(GitProvider):
         if not workspace or not getattr(self, "headers", None):
             return ""
         return get_cached_global_settings(
-            f"bitbucket:{workspace}", lambda: self._fetch_global_repo_settings(workspace))
+            self._get_global_repo_settings_cache_key(workspace),
+            lambda: self._fetch_global_repo_settings(workspace),
+        )
+
+    def _get_global_repo_settings_cache_key(self, workspace):
+        auth_header = self.headers.get("Authorization", "") if getattr(self, "headers", None) else ""
+        auth_fingerprint = hashlib.sha256(auth_header.encode("utf-8")).hexdigest() if auth_header else "no-auth"
+        return f"bitbucket:{workspace}:{auth_fingerprint}"
 
     def _fetch_global_repo_settings(self, workspace):
         # A missing settings repo/file (404) is an expected fallback -> return "" (cached). Other
         # errors raise (via raise_for_status) so the caller does not cache a transient failure.
         repo_url = f"https://api.bitbucket.org/2.0/repositories/{workspace}/pr-agent-settings"
-        repo_resp = requests.request("GET", repo_url, headers=self.headers)
+        repo_resp = requests.request(
+            "GET",
+            repo_url,
+            headers=self.headers,
+            timeout=BITBUCKET_REQUEST_TIMEOUT_SECONDS,
+        )
         if repo_resp.status_code in (403, 404):  # missing repo or no access -> expected, cacheable
             return ""
         repo_resp.raise_for_status()
@@ -117,7 +137,11 @@ class BitbucketProvider(GitProvider):
         if not main_branch:
             return ""
         file_resp = requests.request(
-            "GET", f"{repo_url}/src/{main_branch}/.pr_agent.toml", headers=self.headers)
+            "GET",
+            f"{repo_url}/src/{main_branch}/.pr_agent.toml",
+            headers=self.headers,
+            timeout=BITBUCKET_REQUEST_TIMEOUT_SECONDS,
+        )
         if file_resp.status_code in (403, 404):  # missing file or no access -> expected, cacheable
             return ""
         file_resp.raise_for_status()

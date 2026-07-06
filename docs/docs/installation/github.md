@@ -58,7 +58,7 @@ See detailed usage instructions in the [USAGE GUIDE](../usage-guide/automations_
 
 By default, the `pull_request` event does not have access to repository secrets when the PR originates from a forked repository, which means PR-Agent won't be able to access your `OPENAI_KEY` and `GITHUB_TOKEN` secrets.
 
-To support PRs from external contributors (forks), use the `pull_request_target` event instead. This event runs in the context of the base repository and has access to secrets, while the PR code is checked out manually with `actions/checkout`.
+To support PRs from external contributors (forks), use the `pull_request_target` event instead. This event runs in the context of the base repository and has access to secrets. PR-Agent reads PR data through the GitHub API and does not require checking out the PR code.
 
 ```yaml
 name: PR Agent
@@ -84,7 +84,7 @@ jobs:
 ```
 
 !!! tip "No local checkout needed"
-    PR-Agent uses the GitHub API to fetch PR data directly from the event payload — it does not require a local checkout of the PR code. This means you can safely omit the `actions/checkout` step entirely, avoiding common pitfalls with `pull_request_target` like the `issue_comment` event lacking a `pull_request.head.sha` ref.
+    PR-Agent uses the GitHub API to fetch PR data directly from the event payload, so you can omit the `actions/checkout` step entirely. Add checkout only when another step in the same workflow specifically needs local files.
 
 !!! warning "Security considerations"
     Using `pull_request_target` gives the workflow access to repository secrets. Unlike the `pull_request` event, the PR code is not automatically checked out, which is a security feature. Avoid adding an `actions/checkout` step unless you have a specific need for the local files — if you do add one, review the [GitHub security guide on pull_request_target](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target).
