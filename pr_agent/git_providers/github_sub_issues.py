@@ -26,11 +26,11 @@ def fetch_sub_issues(github_client, issue_url):
     sub_issues = set()
 
     # Extract owner, repo, and issue number from URL
-    parts = issue_url.rstrip("/").split("/")
-    owner, repo, issue_number = parts[-4], parts[-3], parts[-1]
     try:
+        parts = issue_url.rstrip("/").split("/")
+        owner, repo, issue_number = parts[-4], parts[-3], parts[-1]
         issue_number = int(issue_number)
-    except ValueError:
+    except (IndexError, ValueError):
         get_logger().warning(f"Invalid issue URL for sub-issue lookup: {issue_url}")
         return sub_issues
 
@@ -56,7 +56,9 @@ def fetch_sub_issues(github_client, issue_url):
         issue_id = response_json.get("data", {}).get("repository", {}).get("issue", {}).get("id")
 
         if not issue_id:
-            get_logger().warning(f"Issue ID not found for {issue_url}")
+            get_logger().warning(
+                f"Issue ID not found for {issue_url}", artifact={"errors": response_json.get("errors")}
+            )
             return sub_issues
 
         # Fetch Sub-Issues

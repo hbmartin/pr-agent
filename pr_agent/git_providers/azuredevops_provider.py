@@ -786,7 +786,7 @@ class AzureDevopsProvider(GitProvider):
         try:
             self.azure_devops_client.update_thread(CommentThread(status=status), self.repo_slug, self.pr_num, thread_id, self.workspace_slug)
         except Exception as e:
-            get_logger().exception(f"Failed to fetch thread context, error: {e}")
+            get_logger().exception(f"Failed to set thread status, error: {e}")
 
     def reply_to_thread(self, thread_id: int, body: str, is_temporary: bool = False) -> Comment:
         try:
@@ -804,7 +804,7 @@ class AzureDevopsProvider(GitProvider):
             thread = self.azure_devops_client.get_pull_request_thread(self.repo_slug, self.pr_num, thread_id, self.workspace_slug)
             return thread.thread_context
         except Exception as e:
-            get_logger().exception(f"Failed to set thread status, error: {e}")
+            get_logger().exception(f"Failed to get thread context, error: {e}")
 
     @staticmethod
     def _parse_pr_url(pr_url: str) -> Tuple[str, str, int]:
