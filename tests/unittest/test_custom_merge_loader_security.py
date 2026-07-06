@@ -45,10 +45,14 @@ FORBIDDEN_DIRECTIVES = [
 
 
 class FakeDynaconf:
-    """Minimal Dynaconf-like object exposing settings_files and a .set() recorder."""
+    """Minimal Dynaconf-like object exposing settings_file and a .set() recorder.
+
+    Real Dynaconf accepts `settings_files` only as an init alias and stores the
+    list under the singular `settings_file` attribute, which the loader reads.
+    """
 
     def __init__(self, settings_files, includes=None, preload=None):
-        self.settings_files = settings_files
+        self.settings_file = settings_files
         if includes is not None:
             self.includes = includes
         if preload is not None:
