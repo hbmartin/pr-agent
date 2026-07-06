@@ -89,7 +89,7 @@ class GithubProvider(GitProvider):
                 return None
             # else: Valid repo handle:
             return repo_obj.get_issue(issue_number)
-        except Exception as e:
+        except Exception:
             get_logger().exception(f"Failed to get an issue object for issue: {issue_url}, belonging to owner/repo: {repo_name}")
             return None
 
@@ -118,7 +118,7 @@ class GithubProvider(GitProvider):
                 get_logger().error(f"url is neither an issues url nor a PR url nor a valid git url: {given_url}. Returning empty result.")
                 return ""
             return repo_path
-        except Exception as e:
+        except Exception:
             get_logger().exception(f"unable to parse url: {given_url}. Returning empty result.")
             return ""
 
@@ -234,7 +234,7 @@ class GithubProvider(GitProvider):
         else:
             try:
                 return len(self.git_files)
-            except Exception as e:
+            except Exception:
                 return -1
 
     def get_diff_files(self) -> list[FilePatchInfo]:
@@ -593,7 +593,7 @@ class GithubProvider(GitProvider):
                 try:
                     self.publish_inline_comments([comment], disable_fallback=True)
                     get_logger().info(f"Published invalid comment as a single line comment: {comment}")
-                except:
+                except Exception:
                     get_logger().error(f"Failed to publish invalid comment as a single line comment: {comment}")
 
     def _verify_code_comment(self, comment: dict):
@@ -820,7 +820,7 @@ class GithubProvider(GitProvider):
         if not self.github_user_id:
             try:
                 self.github_user_id = self.github_client.get_user().raw_data['login']
-            except Exception as e:
+            except Exception:
                 self.github_user_id = ""
                 # logging.exception(f"Failed to get user id, error: {e}")
         return self.github_user_id
@@ -1212,7 +1212,7 @@ class GithubProvider(GitProvider):
         try:
             pr_id = f"{self.repo}/{self.pr_num}"
             return pr_id
-        except:
+        except Exception:
             return ""
 
     def fetch_sub_issues(self, issue_url):
@@ -1325,7 +1325,7 @@ class GithubProvider(GitProvider):
                         if not hasattr(file, 'patches_range'):
                             file.patches_range = []
                             patch_lines = patch_str.splitlines()
-                            for i, line in enumerate(patch_lines):
+                            for _i, line in enumerate(patch_lines):
                                 if line.startswith('@@'):
                                     match = RE_HUNK_HEADER.match(line)
                                     # identify hunk header
@@ -1345,7 +1345,7 @@ class GithubProvider(GitProvider):
                         min_distance = float('inf')
                         patch_range_min = None
                         # find the hunk that contains the comment, or the closest one
-                        for i, patch_range in enumerate(patches_range):
+                        for _i, patch_range in enumerate(patches_range):
                             d1 = comment_start_line - patch_range['start']
                             d2 = patch_range['end'] - comment_end_line
                             if d1 >= 0 and d2 >= 0:  # found a valid hunk

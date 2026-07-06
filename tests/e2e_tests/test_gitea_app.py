@@ -87,7 +87,7 @@ def test_e2e_run_gitea_app():
                 'sha': file_sha,
                 'branch': new_branch
             }
-        except:
+        except Exception:
             file_data = {
                 'message': 'Add cli_pip.py',
                 'content': file_content_encoded,

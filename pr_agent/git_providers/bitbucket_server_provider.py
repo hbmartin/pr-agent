@@ -70,7 +70,7 @@ class BitbucketServerProvider(GitProvider):
         try:
             parsed_url = urlparse(self.pr_url)
             return f"{parsed_url.scheme}://{parsed_url.netloc}/scm/{self.workspace_slug.lower()}/{self.repo_slug.lower()}.git"
-        except Exception as e:
+        except Exception:
             get_logger().exception(f"url is not a valid merge requests url: {self.pr_url}")
             return ""
 
@@ -216,7 +216,7 @@ class BitbucketServerProvider(GitProvider):
                                                                      self.repo_slug,
                                                                      path,
                                                                      commit_id)
-        except HTTPError as e:
+        except HTTPError:
             get_logger().debug(f"File {path} not found at commit id: {commit_id}")
         return file_content
 

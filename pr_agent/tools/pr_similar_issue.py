@@ -36,18 +36,18 @@ class PRSimilarIssue:
         if get_settings().pr_similar_issue.vectordb == "pinecone":
             try:
                 import pinecone
-            except:
-                raise Exception("Please install 'pinecone' and 'pinecone_datasets' to use pinecone as vectordb")
+            except Exception as e:
+                raise Exception("Please install 'pinecone' and 'pinecone_datasets' to use pinecone as vectordb") from e
             # assuming pinecone api key and environment are set in secrets file
             try:
                 api_key = get_settings().pinecone.api_key
                 environment = get_settings().pinecone.environment
-            except Exception:
+            except Exception as e:
                 if not self.cli_mode:
                     repo_name, original_issue_number = self.git_provider._parse_issue_url(self.issue_url.split('=')[-1])
                     issue_main = self.git_provider.repo_obj.get_issue(original_issue_number)
                     issue_main.create_comment("Please set pinecone api key and environment in secrets file")
-                raise Exception("Please set pinecone api key and environment in secrets file")
+                raise Exception("Please set pinecone api key and environment in secrets file") from e
 
             # check if index exists, and if repo is already indexed
             run_from_scratch = False
@@ -111,8 +111,8 @@ class PRSimilarIssue:
         elif get_settings().pr_similar_issue.vectordb == "lancedb":
             try:
                 import lancedb  # import lancedb only if needed
-            except:
-                raise Exception("Please install lancedb to use lancedb as vectordb")
+            except Exception as e:
+                raise Exception("Please install lancedb to use lancedb as vectordb") from e
             self.db = lancedb.connect(get_settings().lancedb.uri)
             self.table = None
 
@@ -177,20 +177,20 @@ class PRSimilarIssue:
             try:
                 import qdrant_client
                 from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, VectorParams
-            except Exception:
-                raise Exception("Please install qdrant-client to use qdrant as vectordb")
+            except Exception as e:
+                raise Exception("Please install qdrant-client to use qdrant as vectordb") from e
 
             api_key = None
             url = None
             try:
                 api_key = get_settings().qdrant.api_key
                 url = get_settings().qdrant.url
-            except Exception:
+            except Exception as e:
                 if not self.cli_mode:
                     repo_name, original_issue_number = self.git_provider._parse_issue_url(self.issue_url.split('=')[-1])
                     issue_main = self.git_provider.repo_obj.get_issue(original_issue_number)
                     issue_main.create_comment("Please set qdrant url and api key in secrets file")
-                raise Exception("Please set qdrant url and api key in secrets file")
+                raise Exception("Please set qdrant url and api key in secrets file") from e
 
             self.qdrant = qdrant_client.QdrantClient(url=url, api_key=api_key)
 
@@ -297,7 +297,7 @@ class PRSimilarIssue:
 
                 try:
                     issue_number = int(r["id"].split('.')[0].split('_')[-1])
-                except:
+                except Exception:
                     get_logger().debug(f"Failed to parse issue number from {r['id']}")
                     continue
 
@@ -322,7 +322,7 @@ class PRSimilarIssue:
 
                 try:
                     issue_number = int(r["id"].split('.')[0].split('_')[-1])
-                except:
+                except Exception:
                     get_logger().debug(f"Failed to parse issue number from {r['id']}")
                     continue
 
@@ -379,7 +379,7 @@ class PRSimilarIssue:
                 url = list(issue.get_comments())[relevant_comment_number_list[i]].html_url
             similar_issues_str += f"{i + 1}. **[{title}]({url})** (score={score_list[i]})\n\n"
         if get_settings().config.publish_output:
-            response = issue_main.create_comment(similar_issues_str)
+            issue_main.create_comment(similar_issues_str)
         get_logger().info(similar_issues_str)
         get_logger().info('Done')
 
@@ -458,14 +458,14 @@ class PRSimilarIssue:
         try:
             res = openai.Embedding.create(input=list_to_encode, engine=MODEL)
             embeds = [record['embedding'] for record in res['data']]
-        except:
+        except Exception:
             embeds = []
             get_logger().error('Failed to embed entire list, embedding one by one...')
-            for i, text in enumerate(list_to_encode):
+            for _i, text in enumerate(list_to_encode):
                 try:
                     res = openai.Embedding.create(input=[text], engine=MODEL)
                     embeds.append(res['data'][0]['embedding'])
-                except:
+                except Exception:
                     embeds.append([0] * 1536)
         df["values"] = embeds
         meta = DatasetMetadata.empty()
@@ -554,14 +554,14 @@ class PRSimilarIssue:
         try:
             res = openai.Embedding.create(input=list_to_encode, engine=MODEL)
             embeds = [record['embedding'] for record in res['data']]
-        except:
+        except Exception:
             embeds = []
             get_logger().error('Failed to embed entire list, embedding one by one...')
-            for i, text in enumerate(list_to_encode):
+            for _i, text in enumerate(list_to_encode):
                 try:
                     res = openai.Embedding.create(input=[text], engine=MODEL)
                     embeds.append(res['data'][0]['embedding'])
-                except:
+                except Exception:
                     embeds.append([0] * 1536)
         df["vector"] = embeds
         get_logger().info('Done')
@@ -656,7 +656,7 @@ class PRSimilarIssue:
         except Exception:
             embeds = []
             get_logger().error('Failed to embed entire list, embedding one by one...')
-            for i, text in enumerate(list_to_encode):
+            for _i, text in enumerate(list_to_encode):
                 try:
                     res = openai.Embedding.create(input=[text], engine=MODEL)
                     embeds.append(res['data'][0]['embedding'])

@@ -92,24 +92,24 @@ lint.unfixable = [
 lint.exclude = ["api/code_completions"]
 
 # B008 is a deliberate style choice (Depends() defaults in FastAPI handlers).
-# The remaining entries are a baseline of pre-existing findings so `ruff check`
-# can gate new code (pre-commit); remove entries as they get burned down.
+# E501 is the last remaining baseline entry of pre-existing findings; remove it
+# as long lines get burned down. Everything else is enforced repo-wide, with
+# deliberate exceptions scoped in per-file-ignores below.
 lint.ignore = [
   "B008",
   "E501", # line-too-long (pre-existing long lines)
-  "E722", # bare-except (pervasive best-effort fallbacks; see bandit B110 note)
-  "F841", # unused-variable (mostly `except ... as e` without use)
-  "B904", # raise-without-from-inside-except
-  "B007", # unused-loop-control-variable
-  "B027", # empty-method-without-abstract-decorator (GitProvider optional hooks)
-  "E402", # module-import-not-at-top-of-file (deliberate config-load ordering)
-  "B905", # zip-without-explicit-strict
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = [
   "E402",
 ] # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
+"pr_agent/algo/ai_handlers/langchain_ai_handler.py" = [
+  "E402", # imports deliberately follow the optional langchain availability probe
+]
+"pr_agent/git_providers/git_provider.py" = [
+  "B027", # empty non-abstract methods are optional provider hooks by design
+]
 "pr_agent/tools/pr_similar_issue.py" = [
   "F821", # pinecone/pandas imports are optional deps, currently commented out in requirements
 ]

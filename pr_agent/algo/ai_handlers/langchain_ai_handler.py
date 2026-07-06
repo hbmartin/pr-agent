@@ -4,7 +4,7 @@ try:
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
     _LANGCHAIN_INSTALLED = True
-except:  # we don't enforce langchain as a dependency, so if it's not installed, just move on
+except Exception:  # we don't enforce langchain as a dependency, so if it's not installed, just move on
     pass
 
 

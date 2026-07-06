@@ -34,7 +34,7 @@ class TokenEncoder:
                     try:
                         cls._encoder_instance = encoding_for_model(cls._model) if "gpt" in cls._model else get_encoding(
                             "o200k_base")
-                    except:
+                    except Exception:
                         cls._encoder_instance = get_encoding("o200k_base")
         return cls._encoder_instance
 

@@ -582,7 +582,7 @@ class LiteLLMAIHandler(BaseAiHandler):
                         if not isinstance(litellm_extra_headers, dict):
                             raise ValueError("LITELLM.EXTRA_HEADERS must be a JSON object")
                     except json.JSONDecodeError as e:
-                        raise ValueError(f"LITELLM.EXTRA_HEADERS contains invalid JSON: {str(e)}")
+                        raise ValueError(f"LITELLM.EXTRA_HEADERS contains invalid JSON: {str(e)}") from e
                     kwargs["extra_headers"] = litellm_extra_headers
 
                 # Support for custom OpenAI body fields (e.g., Flex Processing)

@@ -110,7 +110,6 @@ class AzureDevopsProvider(GitProvider):
         """
         Publishes code suggestions as comments on the PR.
         """
-        post_parameters_list = []
         status = get_settings().azure_devops.get("default_comment_status", "closed")
         for suggestion in code_suggestions:
             body = suggestion['body']
