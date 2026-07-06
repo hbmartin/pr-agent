@@ -355,7 +355,7 @@ class GitProvider(ABC):
     def get_repo_settings(self):
         pass
 
-    def _get_global_repo_settings(self):
+    def _get_global_repo_settings(self) -> str:
         """Org/group/workspace-wide settings blob; providers with a global-settings
         convention (github/gitlab/bitbucket) override this."""
         return ""

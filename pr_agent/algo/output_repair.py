@@ -10,6 +10,10 @@ import yaml
 from pr_agent.log import get_logger
 
 
+def _log_yaml_repair_failure(fallback_name: str, error: Exception) -> None:
+    get_logger().debug(f"Failed to parse AI prediction after {fallback_name}: {error}")
+
+
 def _last_code_suggestion_index(review: str) -> int | None:
     matches = [m.end() for m in re.finditer(r"\}\s*,", review)]
     if not matches:
@@ -152,8 +156,8 @@ def try_fix_yaml(response_text: str,
         data = yaml.safe_load('\n'.join(response_text_lines_copy))
         get_logger().info("Successfully parsed AI prediction after adding |-\n")
         return data
-    except Exception:
-        pass
+    except Exception as e:
+        _log_yaml_repair_failure("adding |-", e)
 
     # 1.5 fallback - try to convert '|' to '|2'. Will solve cases of indent decreasing during the code
     response_text_copy = copy.deepcopy(response_text)
@@ -162,7 +166,8 @@ def try_fix_yaml(response_text: str,
         data = yaml.safe_load(response_text_copy)
         get_logger().info("Successfully parsed AI prediction after replacing | with |2")
         return data
-    except Exception:
+    except Exception as e:
+        _log_yaml_repair_failure("replacing | with |2", e)
         # if it fails, we can try to add spaces to the lines that are not indented properly, and contain '}'.
         response_text_lines_copy = response_text_copy.split('\n')
         for i in range(0, len(response_text_lines_copy)):
@@ -173,8 +178,8 @@ def try_fix_yaml(response_text: str,
             data = yaml.safe_load('\n'.join(response_text_lines_copy))
             get_logger().info("Successfully parsed AI prediction after replacing | with |2 and adding spaces")
             return data
-        except Exception:
-            pass
+        except Exception as inner_e:
+            _log_yaml_repair_failure("replacing | with |2 and adding spaces", inner_e)
 
     # second fallback - try to extract only range from first ```yaml to the last ```
     snippet_pattern = r'```(yaml|yml)?([\s\S]*?)```(?=\s*$|")'
@@ -198,8 +203,8 @@ def try_fix_yaml(response_text: str,
         data = yaml.safe_load(response_text_copy)
         get_logger().info("Successfully parsed AI prediction after removing curly brackets")
         return data
-    except Exception:
-        pass
+    except Exception as e:
+        _log_yaml_repair_failure("removing curly brackets", e)
 
 
     # forth fallback - try to extract yaml snippet by 'first_key' and 'last_key'
@@ -219,8 +224,8 @@ def try_fix_yaml(response_text: str,
                 data = yaml.safe_load(response_text_copy)
                 get_logger().info("Successfully parsed AI prediction after extracting yaml snippet")
                 return data
-            except Exception:
-                pass
+            except Exception as e:
+                _log_yaml_repair_failure("extracting yaml snippet by first and last key", e)
 
     # fifth fallback - try to remove leading '+' (sometimes added by AI for 'existing code' and 'improved code')
     response_text_lines_copy = response_text_lines.copy()
@@ -231,8 +236,8 @@ def try_fix_yaml(response_text: str,
         data = yaml.safe_load('\n'.join(response_text_lines_copy))
         get_logger().info("Successfully parsed AI prediction after removing leading '+'")
         return data
-    except Exception:
-        pass
+    except Exception as e:
+        _log_yaml_repair_failure("removing leading +", e)
 
     # sixth fallback - replace tabs with spaces
     if '\t' in response_text:
@@ -242,8 +247,8 @@ def try_fix_yaml(response_text: str,
             data = yaml.safe_load(response_text_copy)
             get_logger().info("Successfully parsed AI prediction after replacing tabs with spaces")
             return data
-        except Exception:
-            pass
+        except Exception as e:
+            _log_yaml_repair_failure("replacing tabs with spaces", e)
 
     # seventh fallback - add indent for sections of code blocks
     response_text_copy = copy.deepcopy(response_text)
@@ -265,8 +270,8 @@ def try_fix_yaml(response_text: str,
         data = yaml.safe_load(response_text_copy)
         get_logger().info("Successfully parsed AI prediction after adding indent for sections of code blocks")
         return data
-    except Exception:
-        pass
+    except Exception as e:
+        _log_yaml_repair_failure("adding indent for sections of code blocks", e)
 
     # eighth fallback - try to remove pipe chars at the root-level dicts
     response_text_copy = copy.deepcopy(response_text)
@@ -275,8 +280,8 @@ def try_fix_yaml(response_text: str,
         data = yaml.safe_load(response_text_copy)
         get_logger().info("Successfully parsed AI prediction after removing pipe chars")
         return data
-    except Exception:
-        pass
+    except Exception as e:
+        _log_yaml_repair_failure("removing pipe chars", e)
 
     # ninth fallback - try to decode the response text with different encodings. GPT-5 can return text that is not utf-8 encoded.
     encodings_to_try = ['latin-1', 'utf-16']
@@ -286,8 +291,8 @@ def try_fix_yaml(response_text: str,
             if data:
                 get_logger().info(f"Successfully parsed AI prediction after decoding with {encoding} encoding")
                 return data
-        except Exception:
-            pass
+        except Exception as e:
+            _log_yaml_repair_failure(f"decoding with {encoding} encoding", e)
 
     # # sixth fallback - try to remove last lines
     # for i in range(1, len(response_text_lines)):

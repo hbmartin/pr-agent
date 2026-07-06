@@ -1,34 +1,7 @@
-import importlib
-import sys
-import types
-
-import pytest
+from tests.unittest.lambda_webhook_helpers import FakeMangum, lambda_module_fixture
 
 MODULE_NAME = "pr_agent.servers.github_lambda_webhook"
-
-
-class FakeMangum:
-    """Stand-in for mangum.Mangum recording construction and invocations."""
-
-    def __init__(self, app, lifespan="auto"):
-        self.app = app
-        self.lifespan = lifespan
-        self.calls = []
-
-    def __call__(self, event, context):
-        self.calls.append((event, context))
-        return {"statusCode": 200, "body": "handled"}
-
-
-@pytest.fixture
-def lambda_module(monkeypatch):
-    fake_mangum = types.ModuleType("mangum")
-    fake_mangum.Mangum = FakeMangum
-    monkeypatch.setitem(sys.modules, "mangum", fake_mangum)
-    sys.modules.pop(MODULE_NAME, None)
-    module = importlib.import_module(MODULE_NAME)
-    yield module
-    sys.modules.pop(MODULE_NAME, None)
+lambda_module = lambda_module_fixture(MODULE_NAME)
 
 
 def test_handler_wraps_app_with_lifespan_off(lambda_module):

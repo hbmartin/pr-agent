@@ -204,8 +204,8 @@ def check_if_hunk_lines_matches_to_file(i, original_lines, patch_lines, start1):
                         if original_line.encode(encoding).decode().strip() == patch_lines[i + 1].strip():
                             get_logger().info(f"Detected different encoding in hunk header line {start1}, needed encoding: {encoding}")
                             return False # we still want to avoid extending the hunk. But we don't want to log an error
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        get_logger().debug(f"Failed to compare hunk header line with {encoding} encoding: {e}")
 
                 is_valid_hunk = False
                 get_logger().info(

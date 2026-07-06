@@ -786,7 +786,7 @@ class AzureDevopsProvider(GitProvider):
         try:
             self.azure_devops_client.update_thread(CommentThread(status=status), self.repo_slug, self.pr_num, thread_id, self.workspace_slug)
         except Exception as e:
-            get_logger().exception(f"Failed to set thread status, error: {e}")
+            get_logger().exception(f"Failed to fetch thread context, error: {e}")
 
     def reply_to_thread(self, thread_id: int, body: str, is_temporary: bool = False) -> Comment:
         try:

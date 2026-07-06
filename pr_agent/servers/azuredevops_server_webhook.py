@@ -2,7 +2,6 @@
 # The server listens for incoming webhooks from Azure DevOps Server and forwards them to the PR Agent.
 # ADO webhook documentation: https://learn.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks?view=azure-devops
 
-import json
 import os
 import re
 import secrets
@@ -128,28 +127,31 @@ async def handle_request_azure(data, log_context):
     elif data["eventType"] == "ms.vss-code.git-pullrequest-comment-event" and "content" in data["resource"]["comment"]:
         comment = data["resource"]["comment"]
         if available_commands_rgx.match(comment["content"]):
-            if(data["resourceVersion"] == "2.0"):
+            if data["resourceVersion"] == "2.0":
                 repo = data["resource"]["pullRequest"]["repository"]["webUrl"]
                 pr_url = unquote(f'{repo}/pullrequest/{data["resource"]["pullRequest"]["pullRequestId"]}')
                 action = comment["content"]
                 thread_url = comment["_links"]["threads"]["href"]
                 thread_id = int(thread_url.split("/")[-1])
                 comment_id = int(comment["id"])
-                pass
             else:
                 # API V1 not supported as it does not contain the PR URL
                 return JSONResponse(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    content=json.dumps({"message": "version 1.0 webhook for Azure Devops PR comment is not supported. please upgrade to version 2.0"})),
+                    content={
+                        "message": "version 1.0 webhook for Azure Devops PR comment is not supported. "
+                                   "please upgrade to version 2.0"
+                    },
+                )
         else:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                content=json.dumps({"message": "Unsupported command"}),
+                content={"message": "Unsupported command"},
             )
     else:
         return JSONResponse(
             status_code=status.HTTP_204_NO_CONTENT,
-            content=json.dumps({"message": "Unsupported event"}),
+            content={"message": "Unsupported event"},
         )
 
     log_context["event"] = data["eventType"]
@@ -161,7 +163,7 @@ async def handle_request_azure(data, log_context):
         get_logger().error("Azure DevOps Trigger failed. Error:" + str(e))
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=json.dumps({"message": "Internal server error"}),
+            content={"message": "Internal server error"},
         )
     return JSONResponse(
         status_code=status.HTTP_202_ACCEPTED, content=jsonable_encoder({"message": "webhook triggered successfully"})

@@ -11,6 +11,7 @@ created lazily and only once per process (webhook servers build a single
 FastAPI app at import time).
 """
 import time
+from threading import Lock
 
 from pr_agent.config_loader import get_settings
 from pr_agent.log import get_logger
@@ -47,6 +48,7 @@ def _get_metrics():
 
 
 _degradation_counter = None  # created lazily, once per process
+_degradation_counter_lock = Lock()
 
 
 def count_degradation(component: str, kind: str) -> None:
@@ -61,11 +63,13 @@ def count_degradation(component: str, kind: str) -> None:
     if not metrics_enabled():
         return
     if _degradation_counter is None:
-        _degradation_counter = Counter(
-            "pr_agent_degradations_total",
-            "Requests answered with a fallback after a swallowed error",
-            ["component", "kind"],
-        )
+        with _degradation_counter_lock:
+            if _degradation_counter is None:
+                _degradation_counter = Counter(
+                    "pr_agent_degradations_total",
+                    "Requests answered with a fallback after a swallowed error",
+                    ["component", "kind"],
+                )
     _degradation_counter.labels(component=component, kind=kind).inc()
 
 

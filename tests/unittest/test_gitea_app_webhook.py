@@ -6,8 +6,8 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-import pr_agent.servers.gitea_app as gitea_app
 from pr_agent.config_loader import get_settings
+from pr_agent.servers import gitea_app
 from tests.unittest._settings_helpers import restore_settings, snapshot_settings
 
 SETTINGS_KEYS = [

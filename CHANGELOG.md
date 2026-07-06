@@ -1,3 +1,5 @@
+# Changelog
+
 > **Historical document.** This file stopped being maintained in August 2023 and is kept
 > only for archaeology. For current changes see the
 > [GitHub releases page](https://github.com/hbmartin/pr-agent/releases) and the

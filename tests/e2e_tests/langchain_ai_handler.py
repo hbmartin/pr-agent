@@ -37,7 +37,9 @@ async def measure_performance(handler, num_requests=3):
     ]
 
     # Execute requests concurrently
-    responses = await asyncio.gather(*tasks)
+    responses = await asyncio.gather(*tasks, return_exceptions=True)
+    successes = [response for response in responses if not isinstance(response, Exception)]
+    failures = [response for response in responses if isinstance(response, Exception)]
 
     end_time = time.time()
     total_time = end_time - start_time
@@ -47,6 +49,11 @@ async def measure_performance(handler, num_requests=3):
     print(f'Total time: {total_time:.2f} seconds')
     print(f'Average time per request: {avg_time:.2f} seconds')
     print(f'Requests per second: {num_requests/total_time:.2f}')
+    print(f'Successful requests: {len(successes)}/{num_requests}')
+    if failures:
+        print(f'Failed requests: {len(failures)}')
+        for failure in failures:
+            print(f'Failure: {failure}')
 
     return responses
 

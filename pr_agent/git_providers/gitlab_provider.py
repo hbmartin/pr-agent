@@ -137,16 +137,16 @@ class GitLabProvider(GitProvider):
                     return raw.decode("utf-8", "ignore")
                 if isinstance(raw, str):
                     return raw
-            except Exception:
-                pass
+            except Exception as e:
+                get_logger().debug(f"Failed to decode GitLab file through python-gitlab: {e}")
 
             # 2) fallback: base64 decode f.content
             try:
                 c = getattr(f, "content", None)
                 if c:
                     return base64.b64decode(c).decode("utf-8", "ignore")
-            except Exception:
-                pass
+            except Exception as e:
+                get_logger().debug(f"Failed to base64-decode GitLab file content: {e}")
 
             return None
 
@@ -212,14 +212,14 @@ class GitLabProvider(GitProvider):
         try:
             enc = urllib.parse.quote_plus(proj_path)
             return self.gl.projects.get(enc)
-        except Exception:
-            pass
+        except Exception as e:
+            get_logger().debug(f"Failed to fetch GitLab project with encoded path: {e}")
 
         # 2) Raw
         try:
             return self.gl.projects.get(proj_path)
-        except Exception:
-            pass
+        except Exception as e:
+            get_logger().debug(f"Failed to fetch GitLab project with raw path: {e}")
 
         # 3) Search fallback
         try:
@@ -454,8 +454,8 @@ class GitLabProvider(GitProvider):
                     'original_files': names_original,
                     'filtered_files': names_filtered
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                get_logger().debug(f"Failed to log filtered GitLab files: {e}")
 
         diff_files = []
         invalid_files_names = []

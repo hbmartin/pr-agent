@@ -119,7 +119,7 @@ class TestHandleRequestAzure:
         }
         response = await ado_webhook.handle_request_azure(data, {})
         assert response.status_code == 400
-        assert "Unsupported command" in json.loads(response.body)
+        assert json.loads(response.body) == {"message": "Unsupported command"}
 
     async def test_comment_event_v1_returns_400(self):
         data = {
@@ -127,10 +127,9 @@ class TestHandleRequestAzure:
             "resourceVersion": "1.0",
             "resource": {"comment": {"content": "/review"}},
         }
-        result = await ado_webhook.handle_request_azure(data, {})
-        # the v1 branch returns the JSONResponse wrapped in a 1-tuple (trailing comma in source)
-        response = result[0] if isinstance(result, tuple) else result
+        response = await ado_webhook.handle_request_azure(data, {})
         assert response.status_code == 400
+        assert json.loads(response.body)["message"].startswith("version 1.0 webhook")
 
     async def test_pr_created_triggers_pr_commands(self, monkeypatch):
         recorded = {}
