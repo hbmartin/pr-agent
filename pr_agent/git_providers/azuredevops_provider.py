@@ -17,7 +17,7 @@ from ..algo.utils import (
 )
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import GitProvider, IncrementalPR
+from .git_provider import REPO_SETTINGS_FILENAME, GitProvider, IncrementalPR
 
 AZURE_DEVOPS_AVAILABLE = True
 ADO_APP_CLIENT_DEFAULT_ID = "499b84ac-1321-427f-aa17-267ca6975798/.default"
@@ -364,7 +364,7 @@ class AzureDevopsProvider(GitProvider):
                 download=False,
                 include_content_metadata=False,
                 include_content=True,
-                path=".pr_agent.toml",
+                path=REPO_SETTINGS_FILENAME,
             )
             return b"".join(list(contents))
         except Exception as e:

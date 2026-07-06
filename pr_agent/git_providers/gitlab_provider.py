@@ -17,7 +17,13 @@ from ..algo.language_handler import is_valid_file
 from ..algo.utils import PRReviewHeader, clip_tokens, find_line_number_of_relevant_line_in_file, load_large_diff
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import MAX_FILES_ALLOWED_FULL, GitProvider, IncrementalPR, get_cached_global_settings
+from .git_provider import (
+    MAX_FILES_ALLOWED_FULL,
+    REPO_SETTINGS_FILENAME,
+    GitProvider,
+    IncrementalPR,
+    get_cached_global_settings,
+)
 
 
 def _to_naive_utc(timestamp: str) -> datetime:
@@ -885,13 +891,10 @@ class GitLabProvider(GitProvider):
         return self.mr.notes.list(get_all=True)[::-1]
 
     def get_repo_settings(self):
-        settings_files = []
-        global_settings = self._get_global_repo_settings()
-        if global_settings:
-            settings_files.append(("global", global_settings))
+        settings_files = self._settings_files_with_global()
         try:
             project = self.gl.projects.get(self.id_project)
-            contents = project.files.get(file_path='.pr_agent.toml', ref=project.default_branch).decode()
+            contents = project.files.get(file_path=REPO_SETTINGS_FILENAME, ref=project.default_branch).decode()
             if contents:
                 settings_files.append(("local", contents))
         except GitlabGetError as e:
@@ -922,7 +925,7 @@ class GitLabProvider(GitProvider):
     def _fetch_global_repo_settings(self, group):
         try:
             project = self.gl.projects.get(f"{group}/pr-agent-settings")
-            return project.files.get(file_path='.pr_agent.toml', ref=project.default_branch).decode()
+            return project.files.get(file_path=REPO_SETTINGS_FILENAME, ref=project.default_branch).decode()
         except GitlabGetError as e:
             if not _is_gitlab_not_found_error(e):
                 raise

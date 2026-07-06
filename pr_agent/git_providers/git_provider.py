@@ -14,6 +14,9 @@ from pr_agent.log import get_logger
 
 MAX_FILES_ALLOWED_FULL = 50
 
+# Repo-local settings file name, single source of truth for every provider.
+REPO_SETTINGS_FILENAME = ".pr_agent.toml"
+
 _GLOBAL_SETTINGS_CACHE: dict = {}
 _GLOBAL_SETTINGS_CACHE_TTL_SECONDS = 15 * 60
 _GLOBAL_SETTINGS_CACHE_MAX_SIZE = 256
@@ -351,6 +354,20 @@ class GitProvider(ABC):
     @abstractmethod
     def get_repo_settings(self):
         pass
+
+    def _get_global_repo_settings(self):
+        """Org/group/workspace-wide settings blob; providers with a global-settings
+        convention (github/gitlab/bitbucket) override this."""
+        return ""
+
+    def _settings_files_with_global(self) -> list:
+        """Start a get_repo_settings result list, seeded with the global settings when present.
+        Providers append their repo-local blob as ("local", contents)."""
+        settings_files = []
+        global_settings = self._get_global_repo_settings()
+        if global_settings:
+            settings_files.append(("global", global_settings))
+        return settings_files
 
     def get_repo_file_content(self, file_path: str, from_default_branch: bool = False):
         return ""

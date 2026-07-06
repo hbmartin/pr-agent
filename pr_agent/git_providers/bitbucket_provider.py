@@ -16,7 +16,7 @@ from ..algo.language_handler import is_valid_file
 from ..algo.utils import find_line_number_of_relevant_line_in_file
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import MAX_FILES_ALLOWED_FULL, GitProvider, get_cached_global_settings
+from .git_provider import MAX_FILES_ALLOWED_FULL, REPO_SETTINGS_FILENAME, GitProvider, get_cached_global_settings
 
 BITBUCKET_REQUEST_TIMEOUT_SECONDS = 30
 
@@ -81,13 +81,10 @@ class BitbucketProvider(GitProvider):
         self.bitbucket_pull_request_api_url = self.pr._BitbucketBase__data["links"]['self']['href']
 
     def get_repo_settings(self):
-        settings_files = []
-        global_settings = self._get_global_repo_settings()
-        if global_settings:
-            settings_files.append(("global", global_settings))
+        settings_files = self._settings_files_with_global()
         try:
             url = (f"https://api.bitbucket.org/2.0/repositories/{self.workspace_slug}/{self.repo_slug}/src/"
-                   f"{self.pr.destination_branch}/.pr_agent.toml")
+                   f"{self.pr.destination_branch}/{REPO_SETTINGS_FILENAME}")
             response = requests.request(
                 "GET",
                 url,
@@ -138,7 +135,7 @@ class BitbucketProvider(GitProvider):
             return ""
         file_resp = requests.request(
             "GET",
-            f"{repo_url}/src/{main_branch}/.pr_agent.toml",
+            f"{repo_url}/src/{main_branch}/{REPO_SETTINGS_FILENAME}",
             headers=self.headers,
             timeout=BITBUCKET_REQUEST_TIMEOUT_SECONDS,
         )

@@ -14,7 +14,7 @@ from git import Repo
 
 from pr_agent.algo.types import EDIT_TYPE, FilePatchInfo
 from pr_agent.config_loader import get_settings
-from pr_agent.git_providers.git_provider import GitProvider
+from pr_agent.git_providers.git_provider import REPO_SETTINGS_FILENAME, GitProvider
 from pr_agent.git_providers.local_git_provider import PullRequestMimic
 from pr_agent.log import get_logger
 
@@ -226,7 +226,7 @@ class GerritProvider(GitProvider):
 
     def get_repo_settings(self):
         try:
-            with open(self.repo_path / ".pr_agent.toml", 'rb') as f:
+            with open(self.repo_path / REPO_SETTINGS_FILENAME, 'rb') as f:
                 contents = f.read()
             return contents
         except OSError:

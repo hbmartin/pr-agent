@@ -16,7 +16,7 @@ from ..algo.types import EDIT_TYPE, FilePatchInfo
 from ..algo.utils import find_line_number_of_relevant_line_in_file, load_large_diff
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import GitProvider, get_git_ssl_env
+from .git_provider import REPO_SETTINGS_FILENAME, GitProvider, get_git_ssl_env
 
 
 class BitbucketServerProvider(GitProvider):
@@ -103,7 +103,7 @@ class BitbucketServerProvider(GitProvider):
 
     def get_repo_settings(self):
         try:
-            content = self.bitbucket_client.get_content_of_file(self.workspace_slug, self.repo_slug, ".pr_agent.toml")
+            content = self.bitbucket_client.get_content_of_file(self.workspace_slug, self.repo_slug, REPO_SETTINGS_FILENAME)
 
             return content
         except Exception as e:

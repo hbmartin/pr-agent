@@ -11,7 +11,7 @@ from pr_agent.git_providers.codecommit_client import CodeCommitClient
 from ..algo.utils import load_large_diff
 from ..config_loader import get_settings
 from ..log import get_logger
-from .git_provider import GitProvider
+from .git_provider import REPO_SETTINGS_FILENAME, GitProvider
 
 
 class PullRequestCCMimic:
@@ -287,7 +287,7 @@ class CodeCommitProvider(GitProvider):
 
     def get_repo_settings(self):
         # a local ".pr_agent.toml" settings file is optional
-        settings_filename = ".pr_agent.toml"
+        settings_filename = REPO_SETTINGS_FILENAME
         return self.codecommit_client.get_file(self.repo_name, settings_filename, self.pr.source_commit, optional=True)
 
     @staticmethod

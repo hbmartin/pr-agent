@@ -31,7 +31,14 @@ from ..algo.utils import (
 from ..config_loader import get_settings
 from ..log import get_logger
 from ..servers.utils import RateLimitExceeded
-from .git_provider import MAX_FILES_ALLOWED_FULL, FilePatchInfo, GitProvider, IncrementalPR, get_cached_global_settings
+from .git_provider import (
+    MAX_FILES_ALLOWED_FULL,
+    REPO_SETTINGS_FILENAME,
+    FilePatchInfo,
+    GitProvider,
+    IncrementalPR,
+    get_cached_global_settings,
+)
 
 
 def _next_page_url(headers: dict) -> str:
@@ -838,10 +845,7 @@ class GithubProvider(GitProvider):
         return self.pr.get_issue_comments()
 
     def get_repo_settings(self):
-        settings_files = []
-        global_settings = self._get_global_repo_settings()
-        if global_settings:
-            settings_files.append(("global", global_settings))
+        settings_files = self._settings_files_with_global()
 
         # Normalize each candidate before applying precedence so a whitespace-only
         # settings value doesn't short-circuit the PR_AGENT_CONFIG_BRANCH fallback.
@@ -854,7 +858,7 @@ class GithubProvider(GitProvider):
             # reason to fall back to the default branch. Unexpected errors are
             # left to propagate so they aren't masked by a silent fallback.
             try:
-                contents = self.repo_obj.get_contents(".pr_agent.toml", ref=config_branch).decoded_content
+                contents = self.repo_obj.get_contents(REPO_SETTINGS_FILENAME, ref=config_branch).decoded_content
                 if settings_files:
                     settings_files.append(("local", contents))
                     return settings_files
@@ -869,7 +873,7 @@ class GithubProvider(GitProvider):
                     f"No .pr_agent.toml on branch '{config_branch}', falling back to default branch")
         try:
             # more logical to take 'pr_agent.toml' from the default branch
-            contents = self.repo_obj.get_contents(".pr_agent.toml").decoded_content
+            contents = self.repo_obj.get_contents(REPO_SETTINGS_FILENAME).decoded_content
             if config_branch and not settings_files:
                 return contents
             settings_files.append(("local", contents))
