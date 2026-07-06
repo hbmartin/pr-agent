@@ -35,6 +35,9 @@ environment variables. See the
 | `skip_keys` | `[]` |  |
 | `custom_reasoning_model` | `false` | when true, disables system messages and temperature controls for models that don't support chat-style inputs |
 | `response_language` | `"en-US"` | Language locales code for PR responses in ISO 3166 and ISO 639 format (e.g., "en-US", "it-IT", "zh-CN", ...) |
+| `repo_context_files` | `["AGENTS.md"]` | Repository-relative files (e.g. AGENTS.md, CLAUDE.md) to include as AI prompt context; set to [] to disable |
+| `repo_context_from_default_branch` | `true` | Read repo context files from the repository default branch (trusts only default-branch content). Set to false to read from the PR target branch instead. |
+| `repo_context_max_lines` | `500` | Maximum total rendered lines for repo context, including wrapper tags |
 | `max_description_tokens` | `500` |  |
 | `max_commits_tokens` | `500` |  |
 | `max_model_tokens` | `32000` | Limits the maximum number of tokens that can be used by any model, regardless of the model's default capabilities. |
@@ -69,6 +72,7 @@ environment variables. See the
 | `enable_claude_extended_thinking` | `false` | Set to true to enable extended thinking feature |
 | `extended_thinking_budget_tokens` | `2048` |  |
 | `extended_thinking_max_output_tokens` | `4096` |  |
+| `claude_extended_thinking_models_override` | `[]` | Optional: override the built-in list of Claude models that receive the extended-thinking payload. When non-empty, this list fully replaces the built-in defaults (see CLAUDE_EXTENDED_THINKING_MODELS in pr_agent/algo/__init__.py). Leave empty to use the defaults. |
 | `extract_issue_from_branch` | `true` | Extract issue number from PR source branch name (e.g. feature/1-auth-google -> issue #1). When true, branch-derived issue URLs are merged with tickets from the PR description for compliance. Set to false to restore description-only behaviour. Note: Branch-name extraction is GitHub-only for now; other providers planned for later. |
 | `branch_issue_regex` | `""` | Optional: custom regex with exactly one capturing group for the issue number (validated at runtime; falls back to default if missing). If empty, uses default pattern: first 1-6 digits at start of branch or after a slash, followed by hyphen or end (e.g. feature/1-test, 123-fix). GitHub only; other providers planned for later. |
 

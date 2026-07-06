@@ -20,8 +20,8 @@ from pr_agent.algo.pr_processing import (
     get_pr_multi_diffs,
     retry_with_fallback_models,
 )
-from pr_agent.algo.skills_loader import get_skills_context
 from pr_agent.algo.repo_context import build_repo_context
+from pr_agent.algo.skills_loader import get_skills_context
 from pr_agent.algo.token_handler import TokenHandler
 from pr_agent.algo.utils import (
     ModelType,

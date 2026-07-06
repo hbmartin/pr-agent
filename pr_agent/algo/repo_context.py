@@ -15,14 +15,14 @@ REPO_CONTEXT_CACHE_ATTRIBUTE = "_repo_context_cache"
 REPO_CONTEXT_CACHE_MAX_SIZE = 256
 REPO_CONTEXT_CACHE_TTL_SECONDS = 15 * 60
 _REPO_CONTEXT_CACHE_MISS = object()
-_unsupported_repo_context_provider_classes = set()
+_unsupported_repo_context_provider_classes: set[type] = set()
 
 
 class _RepoContextCache:
     def __init__(self, max_size: int = REPO_CONTEXT_CACHE_MAX_SIZE, ttl_seconds: int = REPO_CONTEXT_CACHE_TTL_SECONDS):
         self._max_size = max(1, int(max_size))
         self._ttl_seconds = max(0, int(ttl_seconds))
-        self._entries = OrderedDict()
+        self._entries: OrderedDict = OrderedDict()
 
     def copy(self):
         cache = type(self)(max_size=self._max_size, ttl_seconds=self._ttl_seconds)

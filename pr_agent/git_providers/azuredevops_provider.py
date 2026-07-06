@@ -9,9 +9,12 @@ from pr_agent.algo.types import EDIT_TYPE, FilePatchInfo
 
 from ..algo.file_filter import filter_ignored
 from ..algo.language_handler import is_valid_file
-from ..algo.utils import (PRDescriptionHeader, PRReviewHeader, clip_tokens,
-                          find_line_number_of_relevant_line_in_file,
-                          load_large_diff)
+from ..algo.utils import (
+    PRDescriptionHeader,
+    PRReviewHeader,
+    find_line_number_of_relevant_line_in_file,
+    load_large_diff,
+)
 from ..config_loader import get_settings
 from ..log import get_logger
 from .git_provider import GitProvider, IncrementalPR
@@ -500,12 +503,14 @@ class AzureDevopsProvider(GitProvider):
                 except Exception:
                     pass
 
+            incremental = getattr(self, "incremental", None)
             incremental_active = (
-                isinstance(getattr(self, "incremental", None), IncrementalPR)
-                and self.incremental.is_incremental
+                isinstance(incremental, IncrementalPR)
+                and incremental.is_incremental
                 and bool(self.unreviewed_files_map)
-                and self.incremental.last_seen_commit_sha
+                and bool(incremental.last_seen_commit_sha)
             )
+            last_seen_commit_sha = incremental.last_seen_commit_sha if incremental_active else None
             if incremental_active:
                 diffs = [f for f in diffs if f in self.unreviewed_files_map]
 
@@ -551,7 +556,7 @@ class AzureDevopsProvider(GitProvider):
                     original_file_content_str = ""
                 elif incremental_active:
                     inc_version = GitVersionDescriptor(
-                        version=self.incremental.last_seen_commit_sha, version_type="commit"
+                        version=last_seen_commit_sha, version_type="commit"
                     )
                     try:
                         inc_original = self.azure_devops_client.get_item(
@@ -565,7 +570,7 @@ class AzureDevopsProvider(GitProvider):
                         original_file_content_str = inc_original.content or ""
                     except Exception as error:
                         get_logger().warning(
-                            f"Failed to retrieve original of {file} at {self.incremental.last_seen_commit_sha}: {error}"
+                            f"Failed to retrieve original of {file} at {last_seen_commit_sha}: {error}"
                         )
                         original_file_content_str = ""
                 else:
@@ -777,13 +782,13 @@ class AzureDevopsProvider(GitProvider):
             self.azure_devops_client.create_like(self.repo_slug, self.pr_num, thread_id, comment_id, project=self.workspace_slug)
         else:
             self.azure_devops_client.delete_like(self.repo_slug, self.pr_num, thread_id, comment_id, project=self.workspace_slug)
-            
+
     def set_thread_status(self, thread_id: int, status: str):
         try:
             self.azure_devops_client.update_thread(CommentThread(status=status), self.repo_slug, self.pr_num, thread_id, self.workspace_slug)
         except Exception as e:
             get_logger().exception(f"Failed to set thread status, error: {e}")
-            
+
     def reply_to_thread(self, thread_id: int, body: str, is_temporary: bool = False) -> Comment:
         try:
             comment = Comment(content=body)
@@ -794,14 +799,14 @@ class AzureDevopsProvider(GitProvider):
             return response
         except Exception as e:
             get_logger().exception(f"Failed to reply to thread, error: {e}")
-    
+
     def get_thread_context(self, thread_id: int) -> CommentThreadContext:
         try:
             thread = self.azure_devops_client.get_pull_request_thread(self.repo_slug, self.pr_num, thread_id, self.workspace_slug)
             return thread.thread_context
         except Exception as e:
             get_logger().exception(f"Failed to set thread status, error: {e}")
-    
+
     @staticmethod
     def _parse_pr_url(pr_url: str) -> Tuple[str, str, int]:
         parsed_url = urlparse(pr_url)
@@ -809,7 +814,7 @@ class AzureDevopsProvider(GitProvider):
         num_parts = len(path_parts)
         if num_parts < 5:
             raise ValueError("The provided URL has insufficient path components for an Azure DevOps PR URL")
-        
+
         # Verify that the second-to-last path component is "pullrequest"
         if path_parts[num_parts - 2] != "pullrequest":
             raise ValueError("The provided URL does not follow the expected Azure DevOps PR URL format")

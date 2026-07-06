@@ -45,22 +45,22 @@ def should_process_pr_logic(data) -> bool:
     try:
         pr_data = data.get("pullRequest", {})
         title = pr_data.get("title", "")
-        
+
         from_ref = pr_data.get("fromRef", {})
         source_branch = from_ref.get("displayId", "") if from_ref else ""
-        
+
         to_ref = pr_data.get("toRef", {})
         target_branch = to_ref.get("displayId", "") if to_ref else ""
-        
+
         author = pr_data.get("author", {})
         user = author.get("user", {}) if author else {}
         sender = user.get("name", "") if user else ""
-        
+
         repository = to_ref.get("repository", {}) if to_ref else {}
         project = repository.get("project", {}) if repository else {}
         project_key = project.get("key", "") if project else ""
         repo_slug = repository.get("slug", "") if repository else ""
-        
+
         repo_full_name = f"{project_key}/{repo_slug}" if project_key and repo_slug else ""
         pr_id = pr_data.get("id", None)
 
@@ -114,7 +114,7 @@ def should_process_pr_logic(data) -> bool:
                     if any(file_path.startswith(folder) for folder in allowed_folders):
                         all_files_outside = False
                         break
-                
+
                 if all_files_outside:
                     get_logger().info(f"Ignoring PR because all files {changed_files} are outside allowed folders {allowed_folders}")
                     return False

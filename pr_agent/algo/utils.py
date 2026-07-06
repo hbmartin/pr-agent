@@ -468,6 +468,7 @@ def get_rate_limit_status(github_token) -> dict:
             if attempt:
                 raise
             time.sleep(0.1)  # transient failure: retry once through the same handling
+    raise RuntimeError("get_rate_limit_status: retries exhausted")  # unreachable; the last attempt re-raises
 
 
 def validate_rate_limit_github(github_token, installation_id=None, threshold=0.1) -> bool:
