@@ -1,7 +1,6 @@
 import pytest
 
 from pr_agent.config_loader import get_settings
-from pr_agent.servers import metrics
 from pr_agent.servers.metrics import count_degradation
 
 
