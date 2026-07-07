@@ -28,22 +28,25 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
 
 _metrics = None  # (request_counter, latency_histogram), created once
+_metrics_lock = Lock()
 
 
 def _get_metrics():
     global _metrics
     if _metrics is None:
-        request_counter = Counter(
-            "pr_agent_http_requests_total",
-            "HTTP requests processed by the webhook server",
-            ["method", "path", "status"],
-        )
-        latency_histogram = Histogram(
-            "pr_agent_http_request_duration_seconds",
-            "HTTP request latency of the webhook server",
-            ["method", "path"],
-        )
-        _metrics = (request_counter, latency_histogram)
+        with _metrics_lock:
+            if _metrics is None:
+                request_counter = Counter(
+                    "pr_agent_http_requests_total",
+                    "HTTP requests processed by the webhook server",
+                    ["method", "path", "status"],
+                )
+                latency_histogram = Histogram(
+                    "pr_agent_http_request_duration_seconds",
+                    "HTTP request latency of the webhook server",
+                    ["method", "path"],
+                )
+                _metrics = (request_counter, latency_histogram)
     return _metrics
 
 
